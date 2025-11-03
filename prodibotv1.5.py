@@ -21,7 +21,7 @@ try:
     # Make sure this region_name matches your DynamoDB table's region!
     dynamodb = boto3.resource('dynamodb', region_name="us-east-1") 
     DYNAMO_TABLE_NAME = 'ProdibotDB'
-    DYNAMO_GSI_NAME = 'StatusAndTime'
+    DYNAMO_GSI_NAME = 'StatusandTime'
     db_table = dynamodb.Table(DYNAMO_TABLE_NAME)
     print(f"Successfully connected to DynamoDB table: {DYNAMO_TABLE_NAME}")
 except Exception as e:
