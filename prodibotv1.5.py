@@ -19,10 +19,11 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 # --- NEW: DynamoDB Setup ---
 # Boto3 will automatically use the IAM Role from our EC2 instance
 try:
-    dynamodb = boto3.resource('dynamodb')
-    DYNAMO_TABLE_NAME = 'ProdiBotReminders'
-    DYNAMO_GSI_NAME = 'RemindersByStatusAndTime'
+    dynamodb = boto3.resource('dynamodb', region_name="us-east-1") # <-- ADD THIS LINE
+    DYNAMO_TABLE_NAME = 'ProdibotDB'
+    DYNAMO_GSI_NAME = 'StatusandTime'
     db_table = dynamodb.Table(DYNAMO_TABLE_NAME)
+    
     print(f"Successfully connected to DynamoDB table: {DYNAMO_TABLE_NAME}")
 except Exception as e:
     print(f"ERROR: Could not connect to DynamoDB. {e}")
