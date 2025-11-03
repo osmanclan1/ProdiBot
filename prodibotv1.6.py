@@ -331,7 +331,7 @@ async def remindat(ctx, time_str: str, *, task: str):
     try:
         # --- UPDATED CODE ---
         # Use dateparser and tell it to assume UTC for ambiguous times
-        remind_time = dateparser.parse(time_str, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
+        remind_time = dateparser.parse(time_str, settings={'TIMEZONE': 'America/Chicago', 'RETURN_AS_TIMEZONE_AWARE': True})
         
         if not remind_time:
             await ctx.send(f'Sorry, I couldn\'t understand the time "{time_str}". Please try again.')
@@ -356,7 +356,7 @@ async def setreminder(ctx, user: discord.User, time_str: str, *, task: str):
     
     try:
         # --- UPDATED CODE ---
-        remind_time = dateparser.parse(time_str, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
+        remind_time = dateparser.parse(time_str, settings={'TIMEZONE': 'America/Chicago', 'RETURN_AS_TIMEZONE_AWARE': True})
 
         if not remind_time:
             await ctx.send(f'Sorry, I couldn\'t understand the time "{time_str}". Please try again.')
@@ -425,7 +425,7 @@ async def updatetime(ctx, short_id: str, time_str: str):
     
     try:
         # --- UPDATED CODE ---
-        new_remind_time = dateparser.parse(time_str, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
+        new_remind_time = dateparser.parse(time_str, settings={'TIMEZONE': 'America/Chicago', 'RETURN_AS_TIMEZONE_AWARE': True})
 
         if not new_remind_time:
             await ctx.send(f'Sorry, I couldn\'t understand the time "{time_str}". Please try again.')
