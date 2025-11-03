@@ -11,6 +11,7 @@ import io
 import boto3
 import uuid
 import shlex
+import dateparser  # <-- NEW IMPORT
 
 # --- Configuration ---
 DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
@@ -325,48 +326,55 @@ async def remindme(ctx, minutes: int, *, task: str):
     except ValueError: await ctx.send("Invalid number of minutes. Please enter a number.")
     except Exception as e: await ctx.send(f"An error occurred: {e}")
 
-@bot.command(name='remindat', help='Sets a reminder (in UTC). Usage: !remindat "<YYYY-MM-DD HH:MM>" <task>')
+@bot.command(name='remindat', help='Sets a reminder (in UTC). Usage: !remindat "<time>" <task> (e.g., "10pm UTC" or "in 2 hours")')
 async def remindat(ctx, time_str: str, *, task: str):
     try:
-        remind_time = datetime.datetime.strptime(time_str, "%Y-%m-d %H:%M")
-        remind_time = remind_time.replace(tzinfo=datetime.timezone.utc)
+        # --- UPDATED CODE ---
+        # Use dateparser and tell it to assume UTC for ambiguous times
+        remind_time = dateparser.parse(time_str, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
+        
+        if not remind_time:
+            await ctx.send(f'Sorry, I couldn\'t understand the time "{time_str}". Please try again.')
+            return
+        # --- END UPDATE ---
+
         now = datetime.datetime.now(datetime.timezone.utc)
         if remind_time <= now:
             await ctx.send("That time is in the past! Please provide a future time (in UTC)."); return
+        
         if await add_reminder_to_db(ctx.author.id, ctx.channel.id, remind_time, task):
              await ctx.send(f"Got it, {ctx.author.mention}! I'll remind you to **{task}** at <t:{int(remind_time.timestamp())}:f>.")
         else: await ctx.send("Sorry, I had an error saving that reminder to the database.")
-    except ValueError: await ctx.send('Invalid time format! Please use `"YYYY-MM-DD HH:MM"` (and make sure it\'s in UTC).')
-    except Exception as e: await ctx.send(f"An error occurred: {e}")
+    
+    except Exception as e: 
+        await ctx.send(f"An error occurred: {e}")
 
-# --- THIS IS THE NEW COMMAND ---
-@bot.command(name='setreminder', help='(Owner) Sets a reminder for another user. Usage: !setreminder <@user/UserID> "<YYYY-MM-DD HH:MM>" <task>')
+@bot.command(name='setreminder', help='(Owner) Sets a reminder for another user. Usage: !setreminder <@user> "<time>" <task>')
 async def setreminder(ctx, user: discord.User, time_str: str, *, task: str):
     if ctx.author.id != OWNER_USER_ID:
         await ctx.send("Sorry, this command is for the bot owner only."); return
     
     try:
-        # 1. Parse the time string (just like !remindat)
-        remind_time = datetime.datetime.strptime(time_str, "%Y-%m-d %H:%M")
-        remind_time = remind_time.replace(tzinfo=datetime.timezone.utc)
+        # --- UPDATED CODE ---
+        remind_time = dateparser.parse(time_str, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
+
+        if not remind_time:
+            await ctx.send(f'Sorry, I couldn\'t understand the time "{time_str}". Please try again.')
+            return
+        # --- END UPDATE ---
+            
         now = datetime.datetime.now(datetime.timezone.utc)
         
-        # 2. Check if the time is in the past
         if remind_time <= now:
             await ctx.send("That time is in the past! Please provide a future time (in UTC)."); return
         
-        # 3. Add the reminder to the DB, but using the *target user's ID*
         if await add_reminder_to_db(user.id, ctx.channel.id, remind_time, task):
-             # 4. Send a confirmation message
              await ctx.send(f"Got it! I'll remind {user.mention} to **{task}** at <t:{int(remind_time.timestamp())}:f>.")
         else: 
             await ctx.send("Sorry, I had an error saving that reminder to the database.")
     
-    except ValueError: 
-        await ctx.send('Invalid time format! Please use `"YYYY-MM-DD HH:MM"` (and make sure it\'s in UTC).')
     except Exception as e: 
         await ctx.send(f"An error occurred: {e}")
-# --- END NEW COMMAND ---
 
 
 # --- NEW COMMANDS ---
@@ -408,22 +416,33 @@ async def updatetask(ctx, short_id: str, *, new_task: str):
         await ctx.send(f"✅ Task updated for `{short_id}`!\n**Old:** {item['task']}\n**New:** {new_task}")
     except Exception as e: await ctx.send(f"An error occurred while updating: {e}")
 
-@bot.command(name='updatetime', help='(Owner) Updates time (in UTC). Usage: !updatetime <id> "<YYYY-MM-DD HH:MM>"')
+@bot.command(name='updatetime', help='(Owner) Updates time (in UTC). Usage: !updatetime <id> "<time>"')
 async def updatetime(ctx, short_id: str, time_str: str):
     if ctx.author.id != OWNER_USER_ID: return
     item = await get_reminder_by_short_id(ctx.author.id, short_id)
     if not item:
         await ctx.send(f"I couldn't find a reminder with an ID starting with `{short_id}`."); return
+    
     try:
-        new_remind_time = datetime.datetime.strptime(time_str, "%Y-%m-d %H:%M").replace(tzinfo=datetime.timezone.utc)
+        # --- UPDATED CODE ---
+        new_remind_time = dateparser.parse(time_str, settings={'TIMEZONE': 'UTC', 'RETURN_AS_TIMEZONE_AWARE': True})
+
+        if not new_remind_time:
+            await ctx.send(f'Sorry, I couldn\'t understand the time "{time_str}". Please try again.')
+            return
+        # --- END UPDATE ---
+
         new_remind_time_iso = new_remind_time.isoformat()
+        # Update logic: Delete and replace to ensure GSI is updated
         db_table.delete_item(Key={'user_id': item['user_id'], 'reminder_id': item['reminder_id']})
         item['remind_time_utc'] = new_remind_time_iso
         db_table.put_item(Item=item)
+        
         new_time_discord = f"<t:{int(new_remind_time.timestamp())}:f>"
         await ctx.send(f"✅ Time updated for **{item['task']}**!\n**New Time:** {new_time_discord}")
-    except ValueError: await ctx.send('Invalid time format! Please use `"YYYY-MM-DD HH:MM"` (and make sure it\'s in UTC).')
-    except Exception as e: await ctx.send(f"An error occurred while updating: {e}")
+    
+    except Exception as e: 
+        await ctx.send(f"An error occurred while updating: {e}")
 
 # --- Run the Bot ---
 if __name__ == "__main__":
