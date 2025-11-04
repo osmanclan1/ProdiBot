@@ -11,24 +11,24 @@ import io
 import boto3
 import uuid
 import shlex
-import dateparser  # <-- NEW IMPORT
+import dateparser
 
 # --- Configuration ---
 DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
+# --- NEW: Set our "home" timezone ---
+LOCAL_TZ = pytz.timezone('America/Chicago')
+
 # --- DynamoDB Setup ---
 try:
-    # Make sure this region_name matches your DynamoDB table's region!
     dynamodb = boto3.resource('dynamodb', region_name="us-east-1") 
     DYNAMO_TABLE_NAME = 'ProdibotDB'
     DYNAMO_GSI_NAME = 'StatusandTime'
     db_table = dynamodb.Table(DYNAMO_TABLE_NAME)
     print(f"Successfully connected to DynamoDB table: {DYNAMO_TABLE_NAME}")
 except Exception as e:
-    print(f"ERROR: Could not connect to DynamoDB. {e}")
-    print("       Did you attach the IAM Role OR specify the correct region_name?")
-    exit()
+    print(f"ERROR: Could not connect to DynamoDB. {e}"); exit()
 
 OWNER_USER_ID = 321078607772385280 
 
@@ -82,15 +82,19 @@ async def get_task_status_from_ai(user_message):
 async def add_reminder_to_db(author_id, channel_id, remind_time, task):
     try:
         reminder_id = str(uuid.uuid4())
+        # --- CHANGED: We now save the local time. ---
+        # (We still call the DB field 'remind_time_utc' so the GSI doesn't break)
         remind_time_iso = remind_time.isoformat()
+        
         db_table.put_item(
             Item={
                 'user_id': str(author_id), 'reminder_id': reminder_id,
-                'channel_id': str(channel_id), 'remind_time_utc': remind_time_iso,
+                'channel_id': str(channel_id), 
+                'remind_time_utc': remind_time_iso, # <-- Still saving to this field
                 'task': task, 'status': 'PENDING'
             }
         )
-        print(f"[Log] Added reminder to DB. User: {author_id}, ID: {reminder_id}")
+        print(f"[Log] Added reminder to DB. User: {author_id}, ID: {reminder_id}, Time: {remind_time_iso}")
         return True
     except Exception as e:
         print(f"[Log] ERROR adding reminder to DB: {e}"); return False
@@ -116,19 +120,24 @@ async def on_message(message):
                 file_content = await attachment.read()
                 gcal = Calendar.from_ical(file_content)
                 reminders_added = 0; reminders_past = 0
-                now_utc = datetime.datetime.now(datetime.timezone.utc)
+                now_local = datetime.datetime.now(LOCAL_TZ) # <-- Use local time
                 for component in gcal.walk():
                     if component.name == "VEVENT":
                         summary = str(component.get('summary'))
                         dtstart = component.get('dtstart').dt
+                        
+                        # Convert event time to our local timezone
                         if isinstance(dtstart, datetime.datetime):
-                            if dtstart.tzinfo: dtstart_utc = dtstart.astimezone(pytz.utc)
-                            else: dtstart_utc = dtstart.replace(tzinfo=pytz.utc)
+                            if dtstart.tzinfo: 
+                                dtstart_local = dtstart.astimezone(LOCAL_TZ)
+                            else: 
+                                dtstart_local = LOCAL_TZ.localize(dtstart)
                         elif isinstance(dtstart, datetime.date):
-                            dtstart_utc = datetime.datetime.combine(dtstart, datetime.time(23, 59, 59), tzinfo=pytz.utc)
+                            dtstart_local = LOCAL_TZ.localize(datetime.datetime.combine(dtstart, datetime.time(23, 59, 59)))
                         else: continue
-                        remind_time = dtstart_utc - datetime.timedelta(hours=24)
-                        if remind_time > now_utc:
+                        
+                        remind_time = dtstart_local - datetime.timedelta(hours=24)
+                        if remind_time > now_local: # <-- Compare local to local
                             await add_reminder_to_db(message.author.id, message.channel.id, remind_time, f"(From Calendar) {summary}")
                             reminders_added += 1
                         else: reminders_past += 1
@@ -154,34 +163,33 @@ async def on_message(message):
                 print(f"[Log] Task complete for user {user_id}. Removed from active list.")
             else:
                 await message.channel.send("Okay, no worries. I'll check in with you again in a bit!")
-                random_minutes = random.randint(15, 45); next_remind_time = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=random_minutes)
+                random_minutes = random.randint(15, 45)
+                # --- CHANGED: Use local time ---
+                next_remind_time = datetime.datetime.now(LOCAL_TZ) + datetime.timedelta(minutes=random_minutes)
                 follow_up_data["status"] = "WAITING_TO_REMIND"; follow_up_data["next_remind_time"] = next_remind_time
                 print(f"[Log] User {user_id} not done. Next check-in at {next_remind_time.isoformat()}")
         
-        # Stop processing so it doesn't try to run the DM reply as a command
         return
 
-    # Only process commands if it wasn't a calendar upload
     if not (message.attachments and message.content == "!importcalendar"):
         await bot.process_commands(message)
 
 # --- Background Loops ---
 @tasks.loop(seconds=15)
 async def check_reminders():
-    now_utc_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    # --- CHANGED: Get the current time in America/Chicago ---
+    now_local_iso = datetime.datetime.now(LOCAL_TZ).isoformat()
+    
     try:
-        # --- THIS IS THE FIX ---
-        # We changed 'status = :s' to '#s = :s'
-        # And added ExpressionAttributeNames to define #s as 'status'
         response = db_table.query(
             IndexName=DYNAMO_GSI_NAME,
-            KeyConditionExpression='#s = :s AND remind_time_utc <= :now',
+            KeyConditionExpression='#s = :s AND remind_time_utc <= :now', # <-- GSI field is still 'remind_time_utc'
             ExpressionAttributeNames={
                 '#s': 'status'
             },
             ExpressionAttributeValues={
                 ':s': 'PENDING',
-                ':now': now_utc_iso
+                ':now': now_local_iso # <-- Compare against the local time
             }
         )
         due_reminders = response.get('Items', [])
@@ -200,16 +208,14 @@ async def check_reminders():
                 if user:
                     if author_id in active_followups and active_followups[author_id]['task'] == task:
                         print(f"[Log] User {author_id} already in active follow-up. Deleting duplicate DB entry.")
-                        sent_successfully = True # Set to true to delete the duplicate reminder
+                        sent_successfully = True 
                     else:
-                        # Try to DM first
                         try:
                             await user.send(f"Hey {user.mention}, this is your reminder to: **{task}**\n\nDid you get that done?")
                             sent_successfully = True
                             print(f"[Log] Sent reminder via DM to {author_id}")
                         
                         except discord.errors.Forbidden:
-                            # Public Fallback
                             print(f"[Log] DM failed for {author_id}. User has DMs blocked. Attempting public fallback.")
                             try:
                                 channel = await bot.fetch_channel(channel_id)
@@ -227,7 +233,6 @@ async def check_reminders():
                         except Exception as e:
                             print(f"[Log] Unknown error trying to DM user: {e}")
                 
-                # Only add to followups if the message was sent
                 if sent_successfully:
                     if not (author_id in active_followups and active_followups[author_id]['task'] == task):
                         active_followups[author_id] = {
@@ -237,7 +242,6 @@ async def check_reminders():
                 else:
                     print(f"[Log] Failed to send reminder {reminder_id} by any method. User or channel not found.")
 
-                # ALWAYS Delete from DB to prevent loops
                 db_table.delete_item(Key={'user_id': str(author_id), 'reminder_id': reminder_id})
                 print(f"[Log] Deleted reminder {reminder_id} from DB.")
 
@@ -250,7 +254,6 @@ async def check_reminders():
                     print(f"[Log] FAILED to delete erroring reminder: {del_e}")
 
     except Exception as e:
-        # This is the error you were seeing!
         print(f"[Log] An unexpected error occurred querying DynamoDB: {e}")
 
 
@@ -261,7 +264,8 @@ async def before_check_reminders():
 
 @tasks.loop(seconds=30)
 async def check_followups():
-    now = datetime.datetime.now(datetime.timezone.utc)
+    # --- CHANGED: Use local time ---
+    now = datetime.datetime.now(LOCAL_TZ) 
     for user_id, data in list(active_followups.items()):
         if data["status"] == "WAITING_TO_REMIND" and data["next_remind_time"] <= now:
             print(f"[Log] Re-reminding user {user_id} for task: {data['task']}")
@@ -300,6 +304,7 @@ async def listreminders(ctx):
         for i, item in enumerate(items):
             task = item['task']
             if len(task) > 50: task = task[:50] + "..."
+            # --- CHANGED: Parse the ISO string back into a local time object ---
             remind_time_obj = datetime.datetime.fromisoformat(item['remind_time_utc'])
             time_str = f"<t:{int(remind_time_obj.timestamp())}:f>"
             reminder_id_short = item['reminder_id'].split('-')[0]
@@ -318,35 +323,40 @@ async def remindme(ctx, minutes: int, *, task: str):
     try:
         if minutes <= 0:
             await ctx.send("Please provide a positive number of minutes!"); return
-        now = datetime.datetime.now(datetime.timezone.utc)
+        
+        # --- CHANGED: Use local time ---
+        now = datetime.datetime.now(LOCAL_TZ) 
         remind_time = now + datetime.timedelta(minutes=minutes)
+        
         if await add_reminder_to_db(ctx.author.id, ctx.channel.id, remind_time, task):
             await ctx.send(f"Okay, {ctx.author.mention}! I'll remind you to **{task}** at <t:{int(remind_time.timestamp())}:f>.")
         else: await ctx.send("Sorry, I had an error saving that reminder to the database.")
     except ValueError: await ctx.send("Invalid number of minutes. Please enter a number.")
-    except Exception as e: await ctx.send(f"An error occurred: {e}")
+    except Exception as e: 
+        print(f"[Log] ERROR in !remindme: {e}")
+        await ctx.send(f"An error occurred: {e}")
 
-@bot.command(name='remindat', help='Sets a reminder (in UTC). Usage: !remindat "<time>" <task> (e.g., "10pm UTC" or "in 2 hours")')
+@bot.command(name='remindat', help='Sets a reminder. Usage: !remindat "<time>" <task> (e.g., "10pm" or "in 2 hours")')
 async def remindat(ctx, time_str: str, *, task: str):
     try:
-        # --- UPDATED CODE ---
-        # Use dateparser and tell it to assume UTC for ambiguous times
+        # --- CHANGED: Parse as local time ---
         remind_time = dateparser.parse(time_str, settings={'TIMEZONE': 'America/Chicago', 'RETURN_AS_TIMEZONE_AWARE': True})
         
         if not remind_time:
             await ctx.send(f'Sorry, I couldn\'t understand the time "{time_str}". Please try again.')
             return
-        # --- END UPDATE ---
 
-        now = datetime.datetime.now(datetime.timezone.utc)
+        # --- CHANGED: Compare local to local ---
+        now = datetime.datetime.now(LOCAL_TZ)
         if remind_time <= now:
-            await ctx.send("That time is in the past! Please provide a future time (in UTC)."); return
+            await ctx.send(f"That time is in the past! (I understood that as: {remind_time.strftime('%Y-%m-%d %I:%M %p')}) Please provide a future time."); return
         
         if await add_reminder_to_db(ctx.author.id, ctx.channel.id, remind_time, task):
              await ctx.send(f"Got it, {ctx.author.mention}! I'll remind you to **{task}** at <t:{int(remind_time.timestamp())}:f>.")
         else: await ctx.send("Sorry, I had an error saving that reminder to the database.")
     
     except Exception as e: 
+        print(f"[Log] ERROR in !remindat: {e}")
         await ctx.send(f"An error occurred: {e}")
 
 @bot.command(name='setreminder', help='(Owner) Sets a reminder for another user. Usage: !setreminder <@user> "<time>" <task>')
@@ -355,18 +365,17 @@ async def setreminder(ctx, user: discord.User, time_str: str, *, task: str):
         await ctx.send("Sorry, this command is for the bot owner only."); return
     
     try:
-        # --- UPDATED CODE ---
+        # --- CHANGED: Parse as local time ---
         remind_time = dateparser.parse(time_str, settings={'TIMEZONE': 'America/Chicago', 'RETURN_AS_TIMEZONE_AWARE': True})
 
         if not remind_time:
             await ctx.send(f'Sorry, I couldn\'t understand the time "{time_str}". Please try again.')
             return
-        # --- END UPDATE ---
             
-        now = datetime.datetime.now(datetime.timezone.utc)
-        
+        # --- CHANGED: Compare local to local ---
+        now = datetime.datetime.now(LOCAL_TZ)
         if remind_time <= now:
-            await ctx.send("That time is in the past! Please provide a future time (in UTC)."); return
+            await ctx.send(f"That time is in the past! (I understood that as: {remind_time.strftime('%Y-%m-%d %I:%M %p')}) Please provide a future time."); return
         
         if await add_reminder_to_db(user.id, ctx.channel.id, remind_time, task):
              await ctx.send(f"Got it! I'll remind {user.mention} to **{task}** at <t:{int(remind_time.timestamp())}:f>.")
@@ -374,11 +383,13 @@ async def setreminder(ctx, user: discord.User, time_str: str, *, task: str):
             await ctx.send("Sorry, I had an error saving that reminder to the database.")
     
     except Exception as e: 
+        print(f"[Log] ERROR in !setreminder: {e}")
         await ctx.send(f"An error occurred: {e}")
 
 
 # --- NEW COMMANDS ---
 async def get_reminder_by_short_id(user_id, short_id):
+    # This logic is fine, but it's only used by admin commands now.
     try:
         response = db_table.query(
             KeyConditionExpression='user_id = :uid',
@@ -394,20 +405,40 @@ async def get_reminder_by_short_id(user_id, short_id):
 @bot.command(name='deletereminder', help='(Owner) Deletes a reminder. Usage: !deletereminder <id>')
 async def deletereminder(ctx, short_id: str):
     if ctx.author.id != OWNER_USER_ID: return
-    item = await get_reminder_by_short_id(ctx.author.id, short_id)
-    if not item:
+    
+    # --- CHANGED: Admin commands should scan the whole table ---
+    response = db_table.scan(
+        FilterExpression='begins_with(reminder_id, :sid)',
+        ExpressionAttributeValues={':sid': short_id}
+    )
+    items = response.get('Items', [])
+    if not items:
         await ctx.send(f"I couldn't find a reminder with an ID starting with `{short_id}`."); return
+    if len(items) > 1:
+        await ctx.send(f"That ID is ambiguous and matches {len(items)} reminders. Please be more specific."); return
+    
+    item = items[0]
     try:
         db_table.delete_item(Key={'user_id': item['user_id'], 'reminder_id': item['reminder_id']})
-        await ctx.send(f"✅ Successfully deleted reminder: **{item['task']}**")
+        await ctx.send(f"✅ Successfully deleted reminder: **{item['task']}** (for user <@{item['user_id']}>)")
     except Exception as e: await ctx.send(f"An error occurred while deleting: {e}")
 
 @bot.command(name='updatetask', help='(Owner) Updates a task. Usage: !updatetask <id> <new task>')
 async def updatetask(ctx, short_id: str, *, new_task: str):
     if ctx.author.id != OWNER_USER_ID: return
-    item = await get_reminder_by_short_id(ctx.author.id, short_id)
-    if not item:
+
+    # --- CHANGED: Admin commands should scan the whole table ---
+    response = db_table.scan(
+        FilterExpression='begins_with(reminder_id, :sid)',
+        ExpressionAttributeValues={':sid': short_id}
+    )
+    items = response.get('Items', [])
+    if not items:
         await ctx.send(f"I couldn't find a reminder with an ID starting with `{short_id}`."); return
+    if len(items) > 1:
+        await ctx.send(f"That ID is ambiguous and matches {len(items)} reminders. Please be more specific."); return
+    
+    item = items[0]
     try:
         db_table.update_item(
             Key={'user_id': item['user_id'], 'reminder_id': item['reminder_id']},
@@ -416,32 +447,47 @@ async def updatetask(ctx, short_id: str, *, new_task: str):
         await ctx.send(f"✅ Task updated for `{short_id}`!\n**Old:** {item['task']}\n**New:** {new_task}")
     except Exception as e: await ctx.send(f"An error occurred while updating: {e}")
 
-@bot.command(name='updatetime', help='(Owner) Updates time (in UTC). Usage: !updatetime <id> "<time>"')
+@bot.command(name='updatetime', help='(Owner) Updates time. Usage: !updatetime <id> "<time>"')
 async def updatetime(ctx, short_id: str, time_str: str):
     if ctx.author.id != OWNER_USER_ID: return
-    item = await get_reminder_by_short_id(ctx.author.id, short_id)
-    if not item:
-        await ctx.send(f"I couldn't find a reminder with an ID starting with `{short_id}`."); return
     
+    # --- CHANGED: Admin commands should scan the whole table ---
+    response = db_table.scan(
+        FilterExpression='begins_with(reminder_id, :sid)',
+        ExpressionAttributeValues={':sid': short_id}
+    )
+    items = response.get('Items', [])
+    if not items:
+        await ctx.send(f"I couldn't find a reminder with an ID starting with `{short_id}`."); return
+    if len(items) > 1:
+        await ctx.send(f"That ID is ambiguous and matches {len(items)} reminders. Please be more specific."); return
+    
+    item = items[0]
     try:
-        # --- UPDATED CODE ---
+        # --- CHANGED: Parse as local time ---
         new_remind_time = dateparser.parse(time_str, settings={'TIMEZONE': 'America/Chicago', 'RETURN_AS_TIMEZONE_AWARE': True})
 
         if not new_remind_time:
             await ctx.send(f'Sorry, I couldn\'t understand the time "{time_str}". Please try again.')
             return
-        # --- END UPDATE ---
+
+        # --- CHANGED: Compare local to local ---
+        now = datetime.datetime.now(LOCAL_TZ)
+        if new_remind_time <= now:
+            await ctx.send(f"That time is in the past! (I understood that as: {new_remind_time.strftime('%Y-%m-%d %I:%M %p')}) Please provide a future time."); return
 
         new_remind_time_iso = new_remind_time.isoformat()
+        
         # Update logic: Delete and replace to ensure GSI is updated
         db_table.delete_item(Key={'user_id': item['user_id'], 'reminder_id': item['reminder_id']})
-        item['remind_time_utc'] = new_remind_time_iso
+        item['remind_time_utc'] = new_remind_time_iso # <-- Still save to this GSI field
         db_table.put_item(Item=item)
         
         new_time_discord = f"<t:{int(new_remind_time.timestamp())}:f>"
         await ctx.send(f"✅ Time updated for **{item['task']}**!\n**New Time:** {new_time_discord}")
     
     except Exception as e: 
+        print(f"[Log] ERROR in !updatetime: {e}")
         await ctx.send(f"An error occurred while updating: {e}")
 
 # --- Run the Bot ---
