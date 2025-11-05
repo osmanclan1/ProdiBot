@@ -13,9 +13,10 @@ import uuid
 import shlex
 import dateparser
 import json
-from dotenv import load_dotenv  # <--- ADD THIS IMPORT
-
+ # Load environment library
+from dotenv import load_dotenv
 load_dotenv()
+
 # --- Configuration ---
 DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
