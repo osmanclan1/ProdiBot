@@ -11,6 +11,8 @@ from typing import List, Optional
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 import asyncio
+from dotenv import load_dotenv
+load_dotenv()
 
 # Import CORS middleware
 from fastapi.middleware.cors import CORSMiddleware
