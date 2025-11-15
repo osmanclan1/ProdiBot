@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prodibot - Reminder Manager</title>
+    <script src="config.js"></script> <style></style>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; background: #f5f5f5; color: #333; line-height: 1.6; }
+        .container { max-width: 900px; margin: 0 auto; padding: 20px; }
+        header { background: #5865F2; color: white; padding: 30px 20px; text-align: center; border-radius: 8px; margin-bottom: 30px; }
+        header h1 { font-size: 2em; margin-bottom: 10px; }
+        header p { opacity: 0.9; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #ddd; }
+        .tab { padding: 12px 24px; background: none; border: none; cursor: pointer; font-size: 16px; color: #666; border-bottom: 3px solid transparent; transition: all 0.3s; }
+        .tab.active { color: #5865F2; border-bottom-color: #5865F2; }
+        .tab-content { display: none; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .tab-content.active { display: block; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: 500; color: #444; }
+        input[type="text"], input[type="date"], input[type="time"], input[type="file"], textarea, select { width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 6px; font-size: 15px; font-family: inherit; transition: border-color 0.3s; }
+        input:focus, textarea:focus, select:focus { outline: none; border-color: #5865F2; }
+        textarea { resize: vertical; min-height: 80px; }
+        .date-time-group { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        button[type="submit"], .btn { background: #5865F2; color: white; padding: 12px 24px; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; transition: background 0.3s; font-weight: 500; }
+        button[type="submit"]:hover, .btn:hover { background: #4752C4; }
+        .reminder-list { margin-top: 30px; }
+        .reminder-item { background: #f9f9f9; padding: 15px; border-radius: 6px; margin-bottom: 12px; border-left: 4px solid #5865F2; display: flex; justify-content: space-between; align-items: center; }
+        .reminder-info h3 { margin-bottom: 5px; color: #333; }
+        .reminder-info p { color: #666; font-size: 14px; }
+        .reminder-actions { display: flex; gap: 8px; }
+        .btn-small { padding: 6px 12px; font-size: 14px; background: #fff; color: #5865F2; border: 2px solid #5865F2; }
+        .btn-small:hover { background: #5865F2; color: white; }
+        .btn-delete { border-color: #ED4245; color: #ED4245; }
+        .btn-delete:hover { background: #ED4245; color: white; }
+        .file-info { background: #f0f0f0; padding: 10px; border-radius: 4px; margin-top: 10px; font-size: 14px; color: #666; }
+        .help-text { font-size: 13px; color: #888; margin-top: 5px; }
+        .success-message, .error-message { color: white; padding: 12px; border-radius: 6px; margin-bottom: 20px; display: none; }
+        .success-message { background: #3BA55D; }
+        .error-message { background: #ED4245; }
+        .auth-container { text-align: center; background: white; padding: 50px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        #userInfo { text-align: right; margin-bottom: 20px; font-size: 14px; color: #555; }
+        #logoutBtn { background: none; border: none; color: #ED4245; cursor: pointer; text-decoration: underline; }
+        @media (max-width: 600px) {
+            .date-time-group { grid-template-columns: 1fr; }
+            .reminder-item { flex-direction: column; align-items: flex-start; }
+            .reminder-actions { margin-top: 10px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="loginView" style="display: none;">
+            <div class="auth-container">
+                <h1>Welcome to Prodibot</h1>
+                <p style="margin: 20px 0;">Please log in with Discord to manage your reminders.</p>
+                <a href="http://127.0.0.1:8000/api/login" class="btn">Login with Discord</a>
+            </div>
+        </div>
+
+        <div id="appView" style="display: none;">
+            <header>
+                <h1>🤖 Prodibot</h1>
+                <p>Your Intelligent Discord Accountability Partner</p>
+            </header>
+
+            <div id="userInfo">
+                Logged in as: <strong id="username"></strong>
+                <button id="logoutBtn" onclick="logout()">Logout</button>
+            </div>
+
+            <div class="success-message" id="successMessage"></div>
+            <div class="error-message" id="errorMessage"></div>
+
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab(event, 'manual')">Quick Reminder</button>
+                <button class="tab" onclick="switchTab(event, 'calendar')">Import Calendar</button>
+                <button class="tab" onclick="switchTab(event, 'csv')">Import CSV</button>
+                <button class="tab" onclick="switchTab(event, 'view')">My Reminders</button>
+            </div>
+
+            <div id="manual" class="tab-content active">
+                <h2>Create a Quick Reminder</h2>
+                <form onsubmit="createReminder(event)">
+                    <div class="form-group">
+                        <label for="taskName">Task Name *</label>
+                        <input type="text" id="taskName" placeholder="e.g., Submit homework, Call dentist" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="taskDesc">Description (optional)</label>
+                        <textarea id="taskDesc" placeholder="Add any additional details about this task"></textarea>
+                    </div>
+                    <div class="date-time-group">
+                        <div class="form-group">
+                            <label for="dueDate">Due Date *</label>
+                            <input type="date" id="dueDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="dueTime">Due Time *</label>
+                            <input type="time" id="dueTime" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="priority">Priority</label>
+                        <select id="priority">
+                            <option value="normal">Normal</option>
+                            <option value="high">High</option>
+                            <option value="low">Low</option>
+                        </select>
+                    </div>
+                    <button type="submit">Create Reminder</button>
+                </form>
+            </div>
+
+            <div id="calendar" class="tab-content">
+                <h2>Import Calendar (.ics)</h2>
+                <p style="margin-bottom: 20px; color: #666;">Upload your Google Calendar or school portal calendar file to automatically create reminders for all events.</p>
+                <form onsubmit="importCalendar(event)">
+                    <div class="form-group">
+                        <label for="icsFile">Select .ics File *</label>
+                        <input type="file" id="icsFile" accept=".ics" required onchange="showFileName('icsFile')">
+                        <p class="help-text">Export your calendar as .ics from Google Calendar, Outlook, or your school portal</p>
+                        <div id="icsFileInfo" class="file-info" style="display: none;"></div>
+                    </div>
+                    <button type="submit">Import Calendar</button>
+                </form>
+            </div>
+
+            <div id="csv" class="tab-content">
+                <h2>Import Tasks from CSV</h2>
+                <p style="margin-bottom: 20px; color: #666;">Upload a spreadsheet with your project tasks. Your CSV should have columns: Task, DueDate, DueTime</p>
+                <form onsubmit="importCSV(event)">
+                    <div class="form-group">
+                        <label for="csvFile">Select .csv File *</label>
+                        <input type="file" id="csvFile" accept=".csv" required onchange="showFileName('csvFile')">
+                        <p class="help-text">Format: Task, DueDate (YYYY-MM-DD), DueTime (HH:MM)</p>
+                        <div id="csvFileInfo" class="file-info" style="display: none;"></div>
+                    </div>
+                    <button type="submit">Import Tasks</button>
+                </form>
+            </div>
+
+            <div id="view" class="tab-content">
+                <h2>My Upcoming Reminders</h2>
+                <div class="reminder-list" id="reminderList">
+                    </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // API Base URL
+
+        // Runs on page load
+        document.addEventListener("DOMContentLoaded", () => {
+            checkLoginStatus();
+            
+            // --- THIS IS THE FIX for the date picker ---
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0'); // getMonth() is 0-indexed
+            const day = String(today.getDate()).padStart(2, '0');
+            
+            const localISODate = `${year}-${month}-${day}`;
+            
+            // Set min date to the local date
+            document.getElementById('dueDate').min = localISODate;
+        });
+
+        async function checkLoginStatus() {
+            try {
+                // 'credentials: "include"' tells fetch to send the cookie
+                const response = await fetch(`${API_BASE_URL}/api/me`, { credentials: "include" });
+                
+                if (!response.ok) {
+                    // Not logged in
+                    showLoginView();
+                    return;
+                }
+
+                const user = await response.json();
+                showAppView(user);
+
+            } catch (error) {
+                console.error("Error checking login:", error);
+                showLoginView();
+            }
+        }
+
+        function showLoginView() {
+            document.getElementById('loginView').style.display = 'block';
+            document.getElementById('appView').style.display = 'none';
+        }
+
+        function showAppView(user) {
+            document.getElementById('loginView').style.display = 'none';
+            document.getElementById('appView').style.display = 'block';
+            document.getElementById('username').textContent = user.username;
+        }
+
+        function logout() {
+            // We just redirect to the API's logout endpoint
+            window.location.href = `${API_BASE_URL}/api/logout`;
+        }
+
+        function switchTab(event, tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // Update tab content
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.getElementById(tabName).classList.add('active');
+
+            // Load reminders if viewing that tab
+            if (tabName === 'view') {
+                displayReminders();
+            }
+        }
+
+        async function createReminder(e) {
+            e.preventDefault();
+            
+            const reminderData = {
+                taskName: document.getElementById('taskName').value,
+                taskDesc: document.getElementById('taskDesc').value,
+                dueDate: document.getElementById('dueDate').value,
+                dueTime: document.getElementById('dueTime').value,
+                priority: document.getElementById('priority').value
+            };
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/create-reminder`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: "include", // Send the cookie
+                    body: JSON.stringify(reminderData)
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || 'Failed to create reminder');
+                }
+
+                showSuccess('Reminder created successfully!');
+                e.target.reset();
+
+            } catch (error) {
+                showError(error.message);
+                console.error('Error creating reminder:', error);
+            }
+        }
+
+        function importCalendar(e) {
+            e.preventDefault();
+            // We will implement this after adding the API endpoint
+            showError("Calendar import is not yet connected to the API.");
+        }
+
+        function importCSV(e) {
+            e.preventDefault();
+            // We will implement this after adding the API endpoint
+            showError("CSV import is not yet connected to the API.");
+        }
+
+        async function displayReminders() {
+            const list = document.getElementById('reminderList');
+            list.innerHTML = '<p>Loading reminders...</p>';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/my-reminders`, { credentials: "include" });
+                
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || 'Failed to fetch reminders');
+                }
+
+                const reminders = await response.json();
+
+                if (reminders.length === 0) {
+                    list.innerHTML = '<p style="color: #888; text-align: center; padding: 40px;">No upcoming reminders. Create one to get started!</p>';
+                    return;
+                }
+
+                // Note: reminders are already sorted by the API
+                list.innerHTML = reminders.map(r => `
+                    <div class="reminder-item">
+                        <div class="reminder-info">
+                            <h3>${r.task}</h3>
+                            <p>${formatDateTime(r.remind_time_utc)} ${r.is_recurring ? '• 🔄 Recurring' : ''}</p>
+                        </div>
+                        <div class="reminder-actions">
+                            <button class="btn btn-small btn-delete" onclick="deleteReminder('${r.reminder_id}', '${r.task}')">Delete</button>
+                        </div>
+                    </div>
+                `).join('');
+
+            } catch (error) {
+                showError(error.message);
+                list.innerHTML = `<p style="color: #ED4245; text-align: center;">Error loading reminders.</p>`;
+                console.error('Error fetching reminders:', error);
+            }
+        }
+
+        async function deleteReminder(id, task) {
+            if (confirm(`Are you sure you want to delete this reminder?\n\nTask: ${task}`)) {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/api/delete-reminder/${id}`, {
+                        method: 'DELETE',
+                        credentials: "include" // Send the cookie
+                    });
+
+                    if (!response.ok) {
+                        const err = await response.json();
+                        throw new Error(err.detail || 'Failed to delete');
+                    }
+                    
+                    showSuccess('Reminder deleted successfully!');
+                    displayReminders(); // Refresh the list
+                } catch (error) {
+                    showError(error.message);
+                    console.error('Error deleting reminder:', error);
+                }
+            }
+        }
+
+        function editReminder(id) {
+            alert('Edit functionality is not yet implemented.');
+        }
+
+        function showFileName(inputId) {
+            const input = document.getElementById(inputId);
+            const infoDiv = document.getElementById(inputId + 'Info');
+            if (input.files.length > 0) {
+                infoDiv.textContent = `Selected: ${input.files[0].name}`;
+                infoDiv.style.display = 'block';
+            }
+        }
+
+        function showSuccess(message) {
+            const msg = document.getElementById('successMessage');
+            msg.textContent = message;
+            msg.style.display = 'block';
+            document.getElementById('errorMessage').style.display = 'none';
+            setTimeout(() => { msg.style.display = 'none'; }, 3000);
+        }
+
+        function showError(message) {
+            const msg = document.getElementById('errorMessage');
+            msg.textContent = message;
+            msg.style.display = 'block';
+            document.getElementById('successMessage').style.display = 'none';
+            setTimeout(() => { msg.style.display = 'none'; }, 3000);
+        }
+
+        function formatDateTime(isoStr) {
+            const date = new Date(isoStr);
+            return date.toLocaleString('en-US', {
+                weekday: 'short',
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit'
+            });
+        }
+
+    </script>
+</body>
+</html>

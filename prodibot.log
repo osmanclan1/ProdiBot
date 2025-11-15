@@ -1,0 +1,196 @@
+2025-11-08 19:57:02,460 [INFO] Found credentials in shared credentials file: ~/.aws/credentials
+2025-11-08 19:57:02,494 [INFO] bot.py is referencing DB tables from db_utils.
+2025-11-08 19:57:02,520 [WARNING] PyNaCl is not installed, voice will NOT be supported
+2025-11-09 09:56:49,563 [INFO] Found credentials in shared credentials file: ~/.aws/credentials
+2025-11-09 09:56:49,623 [INFO] bot.py is referencing DB tables from db_utils.
+2025-11-09 09:56:49,665 [WARNING] PyNaCl is not installed, voice will NOT be supported
+2025-11-09 09:56:49,666 [INFO] logging in using static token
+2025-11-09 09:56:50,400 [INFO] Shard ID None has connected to Gateway (Session ID: f7a48dff0bacf2f3a5f16d3c9987a087).
+2025-11-09 09:56:52,417 [INFO] Logged in as ProdiBot (ID: 1434246405408559125)
+2025-11-09 09:56:52,417 [INFO] Bot is ready.
+2025-11-09 09:56:52,417 [INFO] Reminder check loop is starting.
+2025-11-09 09:56:52,418 [INFO] Follow-up check loop is starting.
+2025-11-09 09:56:52,418 [INFO] Heartbeat: Checking for reminders due before 2025-11-09T09:56:52.418105-06:00
+2025-11-09 09:57:07,419 [INFO] Heartbeat: Checking for reminders due before 2025-11-09T09:57:07.419148-06:00
+2025-11-09 09:57:22,419 [INFO] Heartbeat: Checking for reminders due before 2025-11-09T09:57:22.419321-06:00
+2025-11-09 09:57:37,356 [INFO] [DM USER] 321078607772385280: yes im done with it
+2025-11-09 09:57:37,419 [INFO] Heartbeat: Checking for reminders due before 2025-11-09T09:57:37.419363-06:00
+2025-11-09 09:57:37,598 [INFO] [Log] Classifying user message: 'yes im done with it'
+2025-11-09 09:57:38,019 [INFO] HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2025-11-09 09:57:38,022 [ERROR] [Log] ERROR calling OpenAI for classification: Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-proj-******************************************************************************************************************************************************WeIA. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_api_key'}}
+2025-11-09 09:57:38,180 [INFO] [DM BOT]: Okay, no worries. I'll check in with you again in a bit!
+2025-11-09 09:57:38,385 [INFO] User 321078607772385280 not done. Next check-in at 2025-11-09T11:55:38.334654-06:00
+2025-11-09 09:57:52,419 [INFO] Heartbeat: Checking for reminders due before 2025-11-09T09:57:52.419598-06:00
+2025-11-09 09:58:07,420 [INFO] Heartbeat: Checking for reminders due before 2025-11-09T09:58:07.420247-06:00
+2025-11-09 09:58:22,419 [INFO] Heartbeat: Checking for reminders due before 2025-11-09T09:58:22.419123-06:00
+2025-11-09 09:59:07,983 [INFO] Found credentials in shared credentials file: ~/.aws/credentials
+2025-11-09 09:59:08,032 [INFO] bot.py is referencing DB tables from db_utils.
+2025-11-09 09:59:08,074 [WARNING] PyNaCl is not installed, voice will NOT be supported
+2025-11-09 09:59:08,075 [INFO] logging in using static token
+2025-11-09 09:59:08,639 [INFO] Shard ID None has connected to Gateway (Session ID: d84be123a34dd096944f8025a8be4a86).
+2025-11-09 09:59:10,653 [INFO] Logged in as ProdiBot (ID: 1434246405408559125)
+2025-11-09 09:59:10,654 [INFO] Bot is ready.
+2025-11-09 09:59:10,654 [INFO] Reminder check loop is starting.
+2025-11-09 09:59:10,654 [INFO] Follow-up check loop is starting.
+2025-11-09 09:59:40,951 [INFO] [DM USER] 321078607772385280: its done
+2025-11-09 09:59:41,628 [INFO] HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2025-11-09 09:59:41,629 [ERROR] [Log] ERROR calling OpenAI for chat reply: Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-proj-******************************************************************************************************************************************************WeIA. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_api_key'}}
+2025-11-09 10:00:10,720 [INFO] FOUND 4 due reminder(s)!
+2025-11-09 10:00:10,721 [INFO] Processing reminder 5babe3a4-3587-49d7-9063-f1ca4bb3f6f1 for user 852155629836828683: '"meeting"'
+2025-11-09 10:00:11,064 [WARNING] User 852155629836828683 already has an active task. Deleting duplicate reminder 5babe3a4-3587-49d7-9063-f1ca4bb3f6f1.
+2025-11-09 10:00:11,065 [INFO] Deleting reminder 5babe3a4-3587-49d7-9063-f1ca4bb3f6f1 from database.
+2025-11-09 10:00:11,122 [INFO] Processing reminder e32fcf4d-dfb3-4d58-93d3-0d4a5cf4186c for user 958040736631259136: '"meeting"'
+2025-11-09 10:00:12,713 [INFO] Successfully sent DM to user 958040736631259136 for reminder e32fcf4d-dfb3-4d58-93d3-0d4a5cf4186c.
+2025-11-09 10:00:12,767 [INFO] Deleting reminder e32fcf4d-dfb3-4d58-93d3-0d4a5cf4186c from database.
+2025-11-09 10:00:12,817 [INFO] Processing reminder 6d6428d3-ce4b-43d5-825d-cda56f48fbba for user 847873176360583188: '"meeting"'
+2025-11-09 10:00:13,394 [INFO] Successfully sent DM to user 847873176360583188 for reminder 6d6428d3-ce4b-43d5-825d-cda56f48fbba.
+2025-11-09 10:00:13,447 [INFO] Deleting reminder 6d6428d3-ce4b-43d5-825d-cda56f48fbba from database.
+2025-11-09 10:00:13,499 [INFO] Processing reminder 7ce3e606-9000-41c1-abf4-3148c863f8f6 for user 321078607772385280: '"meeting"'
+2025-11-09 10:00:13,759 [WARNING] User 321078607772385280 already has an active task. Deleting duplicate reminder 7ce3e606-9000-41c1-abf4-3148c863f8f6.
+2025-11-09 10:00:13,759 [INFO] Deleting reminder 7ce3e606-9000-41c1-abf4-3148c863f8f6 from database.
+2025-11-09 11:22:21,327 [INFO] Found credentials in shared credentials file: ~/.aws/credentials
+2025-11-09 11:22:21,379 [INFO] bot.py is referencing DB tables from db_utils.
+2025-11-09 11:22:21,423 [WARNING] PyNaCl is not installed, voice will NOT be supported
+2025-11-09 11:22:21,425 [INFO] logging in using static token
+2025-11-09 11:22:22,097 [INFO] Shard ID None has connected to Gateway (Session ID: 34218165a88ab0e09a8820fb22f053e6).
+2025-11-09 11:22:24,107 [INFO] Logged in as ProdiBot (ID: 1434246405408559125)
+2025-11-09 11:22:24,108 [INFO] Bot is ready.
+2025-11-09 11:22:24,108 [INFO] Reminder check loop is starting.
+2025-11-09 11:22:24,108 [INFO] Follow-up check loop is starting.
+2025-11-09 11:22:31,943 [INFO] [DM USER] 321078607772385280: no
+2025-11-09 11:22:32,211 [INFO] [Log] Classifying user message: 'no'
+2025-11-09 11:22:33,110 [INFO] HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2025-11-09 11:22:33,111 [INFO] Retrying request to /chat/completions in 0.406333 seconds
+2025-11-09 11:22:33,967 [INFO] HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2025-11-09 11:22:33,969 [INFO] Retrying request to /chat/completions in 0.986264 seconds
+2025-11-09 11:22:35,670 [INFO] HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2025-11-09 11:22:35,674 [ERROR] [Log] ERROR calling OpenAI for classification: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}
+2025-11-09 11:22:35,871 [INFO] [DM BOT]: Okay, no worries. I'll check in with you again in a bit!
+2025-11-09 11:22:36,071 [INFO] User 321078607772385280 not done. Next check-in at 2025-11-09T12:12:36.023210-06:00
+2025-11-09 11:27:35,322 [INFO] Found credentials in shared credentials file: ~/.aws/credentials
+2025-11-09 11:27:35,373 [INFO] bot.py is referencing DB tables from db_utils.
+2025-11-09 11:27:35,421 [WARNING] PyNaCl is not installed, voice will NOT be supported
+2025-11-09 11:27:35,422 [INFO] logging in using static token
+2025-11-09 11:27:36,224 [INFO] Shard ID None has connected to Gateway (Session ID: abb71a2f61ad5048d6d859eeb1b94738).
+2025-11-09 11:27:38,252 [INFO] Logged in as ProdiBot (ID: 1434246405408559125)
+2025-11-09 11:27:38,252 [INFO] Bot is ready.
+2025-11-09 11:27:38,252 [INFO] Reminder check loop is starting.
+2025-11-09 11:27:38,252 [INFO] Follow-up check loop is starting.
+2025-11-09 11:28:53,306 [INFO] FOUND 1 due reminder(s)!
+2025-11-09 11:28:53,307 [INFO] Processing reminder 7273a4af-ba2d-44f1-aa19-d33ba328f9ff for user 321078607772385280: 'hi'
+2025-11-09 11:28:53,595 [WARNING] User 321078607772385280 already has an active task. Deleting duplicate reminder 7273a4af-ba2d-44f1-aa19-d33ba328f9ff.
+2025-11-09 11:28:53,595 [INFO] Deleting reminder 7273a4af-ba2d-44f1-aa19-d33ba328f9ff from database.
+2025-11-09 11:29:38,133 [ERROR] Ignoring exception in command memclear
+Traceback (most recent call last):
+  File "/Users/yacoubosman/Projects/prodibotsite/venv/lib/python3.13/site-packages/discord/ext/commands/bot.py", line 1376, in invoke
+    await ctx.command.invoke(ctx)
+  File "/Users/yacoubosman/Projects/prodibotsite/venv/lib/python3.13/site-packages/discord/ext/commands/core.py", line 1056, in invoke
+    await self.prepare(ctx)
+  File "/Users/yacoubosman/Projects/prodibotsite/venv/lib/python3.13/site-packages/discord/ext/commands/core.py", line 973, in prepare
+    await self._parse_arguments(ctx)
+  File "/Users/yacoubosman/Projects/prodibotsite/venv/lib/python3.13/site-packages/discord/ext/commands/core.py", line 880, in _parse_arguments
+    transformed = await self.transform(ctx, param, attachments)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yacoubosman/Projects/prodibotsite/venv/lib/python3.13/site-packages/discord/ext/commands/core.py", line 732, in transform
+    raise MissingRequiredArgument(param)
+discord.ext.commands.errors.MissingRequiredArgument: user is a required argument that is missing.
+2025-11-09 11:29:59,852 [INFO] Admin 321078607772385280 cleared state for 321078607772385280
+2025-11-09 11:31:08,305 [INFO] FOUND 1 due reminder(s)!
+2025-11-09 11:31:08,306 [INFO] Processing reminder 16771c6d-b20d-4477-bc83-7ae8373c1359 for user 321078607772385280: 'hi'
+2025-11-09 11:31:08,902 [INFO] Successfully sent DM to user 321078607772385280 for reminder 16771c6d-b20d-4477-bc83-7ae8373c1359.
+2025-11-09 11:31:08,953 [INFO] Deleting reminder 16771c6d-b20d-4477-bc83-7ae8373c1359 from database.
+2025-11-09 11:31:18,715 [INFO] [DM USER] 321078607772385280: yes i did
+2025-11-09 11:31:18,913 [INFO] [Log] Classifying user message: 'yes i did'
+2025-11-09 11:31:20,578 [INFO] HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-09 11:31:20,591 [INFO] [Log] AI classified as: [TASK_DONE]
+2025-11-09 11:31:20,770 [INFO] [DM BOT]: Great job! Way to get it done. I'll check this off the list. ✅
+2025-11-09 11:31:20,821 [INFO] Task complete for user 321078607772385280. State deleted.
+2025-11-09 11:39:42,920 [INFO] Found credentials in shared credentials file: ~/.aws/credentials
+2025-11-09 11:39:42,974 [INFO] bot.py is referencing DB tables from db_utils.
+2025-11-09 11:39:43,017 [WARNING] PyNaCl is not installed, voice will NOT be supported
+2025-11-09 11:39:43,018 [INFO] logging in using static token
+2025-11-09 11:39:43,986 [INFO] Shard ID None has connected to Gateway (Session ID: 371ec975ee4801f78097aa723e1b0584).
+2025-11-09 11:39:45,999 [INFO] Logged in as ProdiBot (ID: 1434246405408559125)
+2025-11-09 11:39:46,000 [INFO] Bot is ready.
+2025-11-09 11:39:46,000 [INFO] Reminder check loop is starting.
+2025-11-09 11:39:46,000 [INFO] Follow-up check loop is starting.
+2025-11-09 11:41:01,056 [INFO] FOUND 1 due reminder(s)!
+2025-11-09 11:41:01,058 [INFO] Processing reminder 17044365-4f5f-4845-bce5-8a2f8fe39acf for user 321078607772385280: 'hey'
+2025-11-09 11:41:01,772 [INFO] Successfully sent DM to user 321078607772385280 for reminder 17044365-4f5f-4845-bce5-8a2f8fe39acf.
+2025-11-09 11:41:01,847 [INFO] Deleting reminder 17044365-4f5f-4845-bce5-8a2f8fe39acf from database.
+2025-11-09 11:41:08,124 [INFO] [DM USER] 321078607772385280: yes i did
+2025-11-09 11:41:08,382 [INFO] [Log] Classifying user message: 'yes i did'
+2025-11-09 11:41:10,307 [INFO] HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-09 11:41:10,327 [INFO] [Log] AI classified as: [TASK_DONE]
+2025-11-09 11:41:10,626 [INFO] [DM BOT]: Great job! Way to get it done. I'll check this off the list. ✅
+2025-11-09 11:41:10,682 [INFO] Task complete for user 321078607772385280. State deleted.
+2025-11-09 14:40:57,935 [INFO] Found credentials in shared credentials file: ~/.aws/credentials
+2025-11-09 14:40:57,982 [INFO] bot.py is referencing DB tables from db_utils.
+2025-11-09 14:40:58,015 [WARNING] PyNaCl is not installed, voice will NOT be supported
+2025-11-09 14:40:58,016 [INFO] logging in using static token
+2025-11-09 14:40:58,775 [INFO] Shard ID None has connected to Gateway (Session ID: 79286bbc7252019c507748c2dc1f3e6f).
+2025-11-09 14:41:00,797 [INFO] Logged in as ProdiBot (ID: 1434246405408559125)
+2025-11-09 14:41:00,798 [INFO] Bot is ready.
+2025-11-09 14:41:00,799 [INFO] Reminder check loop is starting.
+2025-11-09 14:41:00,799 [INFO] Follow-up check loop is starting.
+2025-11-09 15:30:27,144 [ERROR] Ignoring exception in command None
+discord.ext.commands.errors.CommandNotFound: Command "settz" is not found
+2025-11-09 15:30:30,906 [INFO] Ghost-nudge for user 852155629836828683 for task: test
+2025-11-09 17:33:50,541 [INFO] Shard ID None session has been invalidated.
+2025-11-09 17:33:55,818 [INFO] Shard ID None has connected to Gateway (Session ID: 8f5b8b8f2232d1ea9e4299350c0aa2b3).
+2025-11-09 17:33:57,838 [INFO] Logged in as ProdiBot (ID: 1434246405408559125)
+2025-11-09 17:33:57,838 [INFO] Bot is ready.
+2025-11-09 17:33:57,838 [ERROR] Ignoring exception in on_ready
+Traceback (most recent call last):
+  File "/Users/yacoubosman/Projects/prodibotsite/venv/lib/python3.13/site-packages/discord/client.py", line 504, in _run_event
+    await coro(*args, **kwargs)
+  File "/Users/yacoubosman/Projects/prodibotsite/prodibotv2.0.py", line 153, in on_ready
+    check_reminders.start(); check_followups.start()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/yacoubosman/Projects/prodibotsite/venv/lib/python3.13/site-packages/discord/ext/tasks/__init__.py", line 407, in start
+    raise RuntimeError('Task is already launched and is not completed.')
+RuntimeError: Task is already launched and is not completed.
+2025-11-09 18:59:10,737 [INFO] Shard ID None session has been invalidated.
+2025-11-09 18:59:16,612 [INFO] Shard ID None has connected to Gateway (Session ID: 4a7f2cbc0e27a7f923b9d91c5aa3f6f1).
+2025-11-09 18:59:18,623 [INFO] Logged in as ProdiBot (ID: 1434246405408559125)
+2025-11-09 18:59:18,624 [INFO] Bot is ready.
+2025-11-09 18:59:18,625 [ERROR] Ignoring exception in on_ready
+Traceback (most recent call last):
+  File "/Users/yacoubosman/Projects/prodibotsite/venv/lib/python3.13/site-packages/discord/client.py", line 504, in _run_event
+    await coro(*args, **kwargs)
+  File "/Users/yacoubosman/Projects/prodibotsite/prodibotv2.0.py", line 153, in on_ready
+    check_reminders.start(); check_followups.start()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/yacoubosman/Projects/prodibotsite/venv/lib/python3.13/site-packages/discord/ext/tasks/__init__.py", line 407, in start
+    raise RuntimeError('Task is already launched and is not completed.')
+RuntimeError: Task is already launched and is not completed.
+2025-11-09 19:00:07,690 [ERROR] Ignoring exception in command memclear
+Traceback (most recent call last):
+  File "/Users/yacoubosman/Projects/prodibotsite/venv/lib/python3.13/site-packages/discord/ext/commands/bot.py", line 1376, in invoke
+    await ctx.command.invoke(ctx)
+  File "/Users/yacoubosman/Projects/prodibotsite/venv/lib/python3.13/site-packages/discord/ext/commands/core.py", line 1056, in invoke
+    await self.prepare(ctx)
+  File "/Users/yacoubosman/Projects/prodibotsite/venv/lib/python3.13/site-packages/discord/ext/commands/core.py", line 973, in prepare
+    await self._parse_arguments(ctx)
+  File "/Users/yacoubosman/Projects/prodibotsite/venv/lib/python3.13/site-packages/discord/ext/commands/core.py", line 880, in _parse_arguments
+    transformed = await self.transform(ctx, param, attachments)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yacoubosman/Projects/prodibotsite/venv/lib/python3.13/site-packages/discord/ext/commands/core.py", line 750, in transform
+    return await run_converters(ctx, converter, argument, param)  # type: ignore
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yacoubosman/Projects/prodibotsite/venv/lib/python3.13/site-packages/discord/ext/commands/converter.py", line 1442, in run_converters
+    return await _actual_conversion(ctx, converter, argument, param)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yacoubosman/Projects/prodibotsite/venv/lib/python3.13/site-packages/discord/ext/commands/converter.py", line 1326, in _actual_conversion
+    return await converter().convert(ctx, argument)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yacoubosman/Projects/prodibotsite/venv/lib/python3.13/site-packages/discord/ext/commands/converter.py", line 341, in convert
+    raise UserNotFound(argument)
+discord.ext.commands.errors.UserNotFound: User "@Yashiro" not found.
+2025-11-09 19:00:19,866 [INFO] Admin 720677158736887808 cleared state for 720677158736887808
+2025-11-09 19:02:25,539 [INFO] [DM USER] 720677158736887808: huh
+2025-11-09 19:02:25,809 [INFO] [Log] Classifying user message: 'huh'
+2025-11-09 19:02:28,073 [INFO] HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-11-09 19:02:28,082 [INFO] [Log] AI classified as: [TASK_NOT_DONE]
+2025-11-09 19:02:28,393 [INFO] [DM BOT]: Okay, no worries. I'll check in with you again in a bit!
+2025-11-09 19:02:28,586 [INFO] User 720677158736887808 not done. Next check-in at 2025-11-09T21:07:28.525224-06:00
