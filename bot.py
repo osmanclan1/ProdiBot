@@ -8,7 +8,7 @@ from openai import OpenAI
 from icalendar import Calendar
 import pytz # Still need this for on_message
 import io
-# import boto3 # No longer needed here
+import boto3
 import uuid
 import dateparser
 import csv
@@ -23,7 +23,48 @@ log = logging.getLogger("prodibot")
 # --- NEW: Import our shared database logic ---
 import db_utils
 
-load_dotenv()
+# --- AWS Secrets Manager Integration ---
+def load_secrets_from_aws():
+    """
+    Fetches secrets from AWS Secrets Manager and loads them
+    into environment variables.
+    """
+    secret_name = "prodibot/secrets"  # The name you set in AWS Secrets Manager
+    region_name = "us-east-1"         # Your EC2 instance's region
+
+    try:
+        # Create a Secrets Manager client
+        session = boto3.session.Session()
+        client = session.client(
+            service_name='secretsmanager',
+            region_name=region_name
+        )
+
+        log.info("Fetching secrets from AWS Secrets Manager...")
+        get_secret_value_response = client.get_secret_value(
+            SecretId=secret_name
+        )
+    except Exception as e:
+        log.error(f"Error fetching secrets from AWS: {e}")
+        # Fall back to environment variables or .env file
+        log.warning("Falling back to environment variables...")
+        return False
+
+    # The secret is returned as a JSON string
+    secret_string = get_secret_value_response['SecretString']
+    secrets = json.loads(secret_string)
+
+    # Load each key-value pair into the environment
+    for key, value in secrets.items():
+        os.environ[key] = value
+
+    log.info("Successfully loaded secrets from AWS Secrets Manager.")
+    return True
+
+# Try AWS first, fall back to .env
+aws_success = load_secrets_from_aws()
+if not aws_success:
+    load_dotenv()
 
 # --- Configuration ---
 DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")

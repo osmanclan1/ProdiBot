@@ -4,6 +4,8 @@ import dateparser
 import pytz
 import os
 import requests
+import boto3
+import json
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
@@ -12,13 +14,55 @@ from jose import JWTError, jwt
 from datetime import datetime, timedelta
 import asyncio
 from dotenv import load_dotenv
-load_dotenv()  # Load environment variables from .env file
 
 # Import CORS middleware
 from fastapi.middleware.cors import CORSMiddleware
 
 # Import our shared logic!
 import db_utils 
+
+# --- AWS Secrets Manager Integration ---
+def load_secrets_from_aws():
+    """
+    Fetches secrets from AWS Secrets Manager and loads them
+    into environment variables.
+    """
+    secret_name = "prodibot/secrets"  # The name you set in AWS Secrets Manager
+    region_name = "us-east-1"         # Your EC2 instance's region
+
+    try:
+        # Create a Secrets Manager client
+        session = boto3.session.Session()
+        client = session.client(
+            service_name='secretsmanager',
+            region_name=region_name
+        )
+
+        print("Fetching secrets from AWS Secrets Manager...")
+        get_secret_value_response = client.get_secret_value(
+            SecretId=secret_name
+        )
+    except Exception as e:
+        print(f"Error fetching secrets from AWS: {e}")
+        # Fall back to environment variables or .env file
+        print("Falling back to environment variables...")
+        return False
+
+    # The secret is returned as a JSON string
+    secret_string = get_secret_value_response['SecretString']
+    secrets = json.loads(secret_string)
+
+    # Load each key-value pair into the environment
+    for key, value in secrets.items():
+        os.environ[key] = value
+
+    print("Successfully loaded secrets from AWS Secrets Manager.")
+    return True
+
+# Try AWS first, fall back to .env
+aws_success = load_secrets_from_aws()
+if not aws_success:
+    load_dotenv()  # Load environment variables from .env file
 
 # --- Load Environment Variables ---
 DISCORD_CLIENT_ID = os.environ.get("DISCORD_CLIENT_ID")
