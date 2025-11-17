@@ -14,6 +14,7 @@ from jose import JWTError, jwt
 from datetime import datetime, timedelta
 import asyncio
 from dotenv import load_dotenv
+load_dotenv()
 
 # Import CORS middleware
 from fastapi.middleware.cors import CORSMiddleware
@@ -73,8 +74,12 @@ if not all([DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET, SECRET_KEY]):
     exit()
 
 # --- Auth Configuration ---
-API_BASE_URL = "http://127.0.0.1:8000"
-FRONTEND_URL = "http://127.0.0.1:5500" # URL of your Live Server
+# Your EC2's public IP
+API_BASE_URL = "http://3.83.248.40:8000"
+
+# Your Netlify site's URL
+FRONTEND_URL = "https://omklsd.netlify.app"
+
 DISCORD_AUTH_URL = "https://discord.com/api/oauth2/authorize"
 DISCORD_TOKEN_URL = "https://discord.com/api/oauth2/token"
 DISCORD_API_URL = "https://discord.com/api/users/@me"
