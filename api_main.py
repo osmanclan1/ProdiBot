@@ -201,13 +201,16 @@ async def auth_callback(code: str):
     
     # Redirect to the FRONTEND's URL
     response = RedirectResponse(url=FRONTEND_URL) 
-    response.set_cookie(
-        key="prodibot_session", 
-        value=access_token, 
-        httponly=True, 
-        max_age=expires.total_seconds(),
-        samesite="lax"
-    )
+    response.set_cookie (
+    key="prodibot_session",
+    value=access_token,
+    httponly=True,
+    secure=False,      
+    samesite="None",   
+    path="/",          
+    max_age=int(expires.total_seconds())
+)
+
     return response
 
 @app.get("/api/me", response_model=User)
