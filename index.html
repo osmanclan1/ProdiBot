@@ -142,39 +142,50 @@
 
             <div id="view" class="tab-content">
                 <h2>My Upcoming Reminders</h2>
-                <div class="reminder-list" id="reminderList">
-                    </div>
+                <div class="reminder-list" id="reminderList"></div>
             </div>
         </div>
     </div>
 
     <script>
-        // API Base URL
         const API_BASE_URL = 'http://3.83.248.40:8000';
 
-        // Runs on page load
         document.addEventListener("DOMContentLoaded", () => {
+            // Capture token from URL fragment after OAuth callback
+            const hash = window.location.hash;
+            if (hash.startsWith("#token=")) {
+                const token = hash.slice("#token=".length);
+                localStorage.setItem("prodibot_token", token);
+                // Clean hash from URL (no reload)
+                history.replaceState(null, "", window.location.pathname);
+            }
+
             checkLoginStatus();
             
-            // --- THIS IS THE FIX for the date picker ---
+            // Min date for date picker
             const today = new Date();
             const year = today.getFullYear();
-            const month = String(today.getMonth() + 1).padStart(2, '0'); // getMonth() is 0-indexed
+            const month = String(today.getMonth() + 1).padStart(2, '0');
             const day = String(today.getDate()).padStart(2, '0');
-            
             const localISODate = `${year}-${month}-${day}`;
-            
-            // Set min date to the local date
             document.getElementById('dueDate').min = localISODate;
         });
 
         async function checkLoginStatus() {
+            const token = localStorage.getItem("prodibot_token");
+            if (!token) {
+                showLoginView();
+                return;
+            }
+
             try {
-                // 'credentials: "include"' tells fetch to send the cookie
-                const response = await fetch(`${API_BASE_URL}/api/me`, { credentials: "include" });
-                
+                const response = await fetch(`${API_BASE_URL}/api/me`, {
+                    headers: {
+                        "Authorization": `Bearer ${token}`
+                    }
+                });
+
                 if (!response.ok) {
-                    // Not logged in
                     showLoginView();
                     return;
                 }
@@ -200,20 +211,17 @@
         }
 
         function logout() {
-            // We just redirect to the API's logout endpoint
+            localStorage.removeItem("prodibot_token");
             window.location.href = `${API_BASE_URL}/api/logout`;
         }
 
         function switchTab(event, tabName) {
-            // Update tab buttons
             document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
             event.target.classList.add('active');
 
-            // Update tab content
             document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
             document.getElementById(tabName).classList.add('active');
 
-            // Load reminders if viewing that tab
             if (tabName === 'view') {
                 displayReminders();
             }
@@ -222,6 +230,13 @@
         async function createReminder(e) {
             e.preventDefault();
             
+            const token = localStorage.getItem("prodibot_token");
+            if (!token) {
+                showError("Not logged in.");
+                showLoginView();
+                return;
+            }
+
             const reminderData = {
                 taskName: document.getElementById('taskName').value,
                 taskDesc: document.getElementById('taskDesc').value,
@@ -233,8 +248,10 @@
             try {
                 const response = await fetch(`${API_BASE_URL}/api/create-reminder`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: "include", // Send the cookie
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
                     body: JSON.stringify(reminderData)
                 });
 
@@ -254,13 +271,11 @@
 
         function importCalendar(e) {
             e.preventDefault();
-            // We will implement this after adding the API endpoint
             showError("Calendar import is not yet connected to the API.");
         }
 
         function importCSV(e) {
             e.preventDefault();
-            // We will implement this after adding the API endpoint
             showError("CSV import is not yet connected to the API.");
         }
 
@@ -268,8 +283,18 @@
             const list = document.getElementById('reminderList');
             list.innerHTML = '<p>Loading reminders...</p>';
 
+            const token = localStorage.getItem("prodibot_token");
+            if (!token) {
+                list.innerHTML = '<p style="color: #888; text-align: center; padding: 40px;">Not logged in.</p>';
+                return;
+            }
+
             try {
-                const response = await fetch(`${API_BASE_URL}/api/my-reminders`, { credentials: "include" });
+                const response = await fetch(`${API_BASE_URL}/api/my-reminders`, {
+                    headers: {
+                        "Authorization": `Bearer ${token}`
+                    }
+                });
                 
                 if (!response.ok) {
                     const err = await response.json();
@@ -283,7 +308,6 @@
                     return;
                 }
 
-                // Note: reminders are already sorted by the API
                 list.innerHTML = reminders.map(r => `
                     <div class="reminder-item">
                         <div class="reminder-info">
@@ -305,10 +329,19 @@
 
         async function deleteReminder(id, task) {
             if (confirm(`Are you sure you want to delete this reminder?\n\nTask: ${task}`)) {
+                const token = localStorage.getItem("prodibot_token");
+                if (!token) {
+                    showError("Not logged in.");
+                    showLoginView();
+                    return;
+                }
+
                 try {
                     const response = await fetch(`${API_BASE_URL}/api/delete-reminder/${id}`, {
                         method: 'DELETE',
-                        credentials: "include" // Send the cookie
+                        headers: {
+                            "Authorization": `Bearer ${token}`
+                        }
                     });
 
                     if (!response.ok) {
@@ -317,7 +350,7 @@
                     }
                     
                     showSuccess('Reminder deleted successfully!');
-                    displayReminders(); // Refresh the list
+                    displayReminders();
                 } catch (error) {
                     showError(error.message);
                     console.error('Error deleting reminder:', error);
