@@ -8,7 +8,6 @@ from openai import OpenAI
 from icalendar import Calendar
 import pytz # Still need this for on_message
 import io
-import boto3
 import uuid
 import dateparser
 import csv
@@ -23,48 +22,7 @@ log = logging.getLogger("prodibot")
 # --- NEW: Import our shared database logic ---
 import db_utils
 
-# --- AWS Secrets Manager Integration ---
-def load_secrets_from_aws():
-    """
-    Fetches secrets from AWS Secrets Manager and loads them
-    into environment variables.
-    """
-    secret_name = "prodibot/secrets"  # The name you set in AWS Secrets Manager
-    region_name = "us-east-1"         # Your EC2 instance's region
-
-    try:
-        # Create a Secrets Manager client
-        session = boto3.session.Session()
-        client = session.client(
-            service_name='secretsmanager',
-            region_name=region_name
-        )
-
-        log.info("Fetching secrets from AWS Secrets Manager...")
-        get_secret_value_response = client.get_secret_value(
-            SecretId=secret_name
-        )
-    except Exception as e:
-        log.error(f"Error fetching secrets from AWS: {e}")
-        # Fall back to environment variables or .env file
-        log.warning("Falling back to environment variables...")
-        return False
-
-    # The secret is returned as a JSON string
-    secret_string = get_secret_value_response['SecretString']
-    secrets = json.loads(secret_string)
-
-    # Load each key-value pair into the environment
-    for key, value in secrets.items():
-        os.environ[key] = value
-
-    log.info("Successfully loaded secrets from AWS Secrets Manager.")
-    return True
-
-# Try AWS first, fall back to .env
-aws_success = load_secrets_from_aws()
-if not aws_success:
-    load_dotenv()
+load_dotenv()
 
 # --- Configuration ---
 DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
@@ -116,7 +74,7 @@ async def get_task_status_from_ai(user_message, user_id):
     print(f"[Log] Classifying user message: '{user_message}'")
     
     # Use db_utils to get context
-    context = db_utils.get_task_context(user_id) 
+    context = await db_utils.get_task_context(user_id) 
     
     instruction = context.get("task", "") if context else ""
     history = context.get("messages", []) if context else []
@@ -149,7 +107,7 @@ async def get_memory_chat_reply(user_id):
     """Generates a conversational reply based on the task and DB message history."""
     
     # Use db_utils to get context
-    context = db_utils.get_task_context(user_id)
+    context = await db_utils.get_task_context(user_id)
     
     if not context:
         print(f"[Log] ERROR: get_memory_chat_reply called for user {user_id} with no context.")
@@ -185,20 +143,11 @@ async def get_memory_chat_reply(user_id):
         print(f"[Log] ERROR calling OpenAI for chat reply: {e}")
         return None
 
-# --- Recurring Reminder Helpers (Unchanged) ---
-# (All functions moved to db_utils.py)
-
-# --- Add Reminder to DB (for PENDING reminders) ---
-# (All functions moved to db_utils.py)
-
 # --- Bot Events ---
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user.name} (ID: {bot.user.id})'); print('Bot is ready.')
     check_reminders.start(); check_followups.start()
-
-@bot.event
-# In bot.py
 
 @bot.event
 async def on_message(message):
@@ -229,7 +178,6 @@ async def on_message(message):
                         else: continue
                         remind_time = dtstart_local - datetime.timedelta(hours=24)
                         if remind_time > now_local: 
-                            # Use async db_utils function
                             await db_utils.add_reminder_to_db(message.author.id, message.channel.id, remind_time, f"(From Calendar) {summary}")
                             reminders_added += 1
                         else: reminders_past += 1
@@ -262,7 +210,6 @@ async def on_message(message):
                         remind_time = due_datetime - datetime.timedelta(hours=48)
                         full_task_str = f"({course}) {task}" if course else task
                         if remind_time > now_local: 
-                            # Use async db_utils function
                             await db_utils.add_reminder_to_db(message.author.id, message.channel.id, remind_time, full_task_str)
                             reminders_added += 1
                         else: reminders_past += 1
@@ -279,59 +226,55 @@ async def on_message(message):
         else: await message.channel.send("That doesn't look like a `.csv` file. Please upload a valid CSV.")
         return 
 
-    # --- MODIFIED: DB-based DM Follow-up Logic ---
+    # --- NEW: DB-based DM Follow-up Logic ---
     if isinstance(message.channel, discord.DMChannel) and not message.content.startswith("!"):
         user_id = message.author.id
         
-        # --- FIX 1: Must 'await' async functions ---
         context = await db_utils.get_task_context(user_id)
         
         if not context:
-            # User has no active task. 
             if not message.content.startswith("!"):
                 await message.channel.send("I'm Prodibot! I track task completion. To start, set a reminder for yourself using `!remindme` or `!remindat` in any server channel I'm in.\n\nOnce you have an active task, I'll check on your progress here in our DMs.")
             await bot.process_commands(message) # Still process commands
             return
 
-        # --- User HAS an active task. This is the main AI loop. ---
+        # --- User HAS an active task. ---
         
         # 1. Add user's message to memory
         log.info(f"[DM USER] {user_id}: {message.content}")
-        # --- FIX 2: Must 'await' async functions ---
         await db_utils.add_memory_message(user_id, "user", message.content, MAX_MEMORY_MESSAGES)
         
-        current_status = context.get('status', 'WAITING_FOR_REPLY')
+        # 2. ALWAYS run the classifier first
+        async with message.channel.typing():
+            status = await get_task_status_from_ai(message.content, user_id)
+            
+        # 3. Handle the classifier result
+        if status == "[TASK_DONE]":
+            reply = "Great job! Way to get it done. I'll check this off the list. ✅"
+            await message.channel.send(reply)
+            log.info(f"[DM BOT]: {reply}")
+            # Task is done, clear the state from DB
+            await asyncio.to_thread(db_utils.state_table.delete_item, Key={'user_id': str(user_id)})
+            log.info(f"Task complete for user {user_id}. State deleted.")
+        
+        else: # [TASK_NOT_DONE]
+            # The user's message was not "done".
+            # Now we check their status to see *how* to reply.
+            current_status = context.get('status', 'WAITING_FOR_REPLY')
 
-        if current_status == "WAITING_FOR_REPLY":
-            # Bot is waiting for a "done" or "not done" reply. Use the classifier.
-            async with message.channel.typing():
-                status = await get_task_status_from_ai(message.content, user_id)
-            
-            if status == "[TASK_DONE]":
-                reply = "Great job! Way to get it done. I'll check this off the list. ✅"
-                await message.channel.send(reply)
-                log.info(f"[DM BOT]: {reply}")
-                # Task is done, clear the state from DB
-                # --- FIX 3: Must 'await' and run in thread ---
-                await asyncio.to_thread(db_utils.state_table.delete_item, Key={'user_id': str(user_id)})
-                log.info(f"Task complete for user {user_id}. State deleted.")
-            
-            else: # [TASK_NOT_DONE]
+            if current_status == "WAITING_FOR_REPLY":
+                # User replied "not done" to a direct nudge. Put them in snooze.
                 reply = "Okay, no worries. I'll check in with you again in a bit!"
                 await message.channel.send(reply)
                 log.info(f"[DM BOT]: {reply}")
-                # --- FIX 4: Must 'await' async functions ---
                 await db_utils.add_memory_message(user_id, "assistant", reply, MAX_MEMORY_MESSAGES)
                 
                 # Set user to "snooze" (WAITING_TO_REMIND)
                 now = datetime.datetime.now(LOCAL_TZ)
                 random_minutes = random.randint(15, 180)
                 next_action_time = now + datetime.timedelta(minutes=random_minutes)
+                new_despawn_time = now + datetime.timedelta(hours=24) # Reset 24h timer
                 
-                # The user replied, so we reset the 24-hour despawn timer
-                new_despawn_time = now + datetime.timedelta(hours=24)
-                
-                # --- FIX 5: Must 'await' and run in thread ---
                 await asyncio.to_thread(
                     db_utils.state_table.update_item,
                     Key={'user_id': str(user_id)},
@@ -349,18 +292,17 @@ async def on_message(message):
                 )
                 log.info(f"User {user_id} not done. Next check-in at {next_action_time.isoformat()}")
 
-        else: # (status == "WAITING_TO_REMIND")
-            # User is "snoozing" but messaged the bot anyway. Use the Chatbot AI.
-            async with message.channel.typing():
-                bot_reply = await get_memory_chat_reply(user_id)
-            
-            if bot_reply:
-                await message.channel.send(bot_reply)
-                log.info(f"[DM BOT]: {bot_reply}")
-                # --- FIX 6: Must 'await' async functions ---
-                await db_utils.add_memory_message(user_id, "assistant", bot_reply, MAX_MEMORY_MESSAGES)
-            else:
-                await message.channel.send("Sorry, I'm having trouble processing that. I'll check in with you later about your task.")
+            else: # (status == "WAITING_TO_REMIND")
+                # User is "snoozing" and just sent a chat message. Use the Chatbot AI.
+                async with message.channel.typing():
+                    bot_reply = await get_memory_chat_reply(user_id)
+                
+                if bot_reply:
+                    await message.channel.send(bot_reply)
+                    log.info(f"[DM BOT]: {bot_reply}")
+                    await db_utils.add_memory_message(user_id, "assistant", bot_reply, MAX_MEMORY_MESSAGES)
+                else:
+                    await message.channel.send("Sorry, I'm having trouble processing that. I'll check in with you later about your task.")
 
         return # We've handled the DM, don't process commands
 
@@ -391,7 +333,7 @@ async def check_reminders():
             author_id = int(reminder['user_id'])
             reminder_id = reminder['reminder_id']
             channel_id = int(reminder['channel_id'])
-            sent_successfully = False
+            sent_successfully = False # Default to False
             
             log.info(f"Processing reminder {reminder_id} for user {author_id}: '{task}'")
 
@@ -401,46 +343,49 @@ async def check_reminders():
                     log.warning(f"Could not fetch user with ID {author_id}. Skipping reminder {reminder_id}.")
                     continue 
 
-                # --- THIS IS THE FIX ---
-                # We must 'await' this async function
                 context = await db_utils.get_task_context(author_id)
+                
+                # --- THIS IS THE NEW LOGIC ---
                 if context:
-                # --- END OF FIX ---
-                    log.warning(f"User {author_id} already has an active task. Deleting duplicate reminder {reminder_id}.")
-                    sent_successfully = True 
-                else:
-                    # --- ATTEMPT 1: SEND DM ---
+                    log.info(f"User {author_id} has an active task. Reminder {reminder_id} is QUEUED. Will retry next loop.")
+                    # We do NOT set sent_successfully=True.
+                    # We just skip this reminder for now.
+                    continue 
+                # --- END OF NEW LOGIC ---
+
+                # --- IF NO CONTEXT, PROCEED AS NORMAL ---
+                
+                # --- ATTEMPT 1: SEND DM ---
+                try:
+                    reply_content = f"Hey {user.mention}, this is your reminder to: **{task}**\n\nDid you get that done?"
+                    await user.send(reply_content)
+                    sent_successfully = True # <--- SET TO TRUE ONLY ON SUCCESS
+                    log.info(f"Successfully sent DM to user {author_id} for reminder {reminder_id}.")
+                    await db_utils.create_task_state(author_id, task, reply_content)
+                
+                except discord.errors.Forbidden:
+                    log.warning(f"DM FAILED for {author_id} (Forbidden). Attempting public fallback to channel {channel_id}.")
+                    
+                    # --- ATTEMPT 2: PUBLIC FALLBACK ---
                     try:
-                        reply_content = f"Hey {user.mention}, this is your reminder to: **{task}**\n\nDid you get that done?"
-                        await user.send(reply_content)
-                        sent_successfully = True
-                        log.info(f"Successfully sent DM to user {author_id} for reminder {reminder_id}.")
-                        # create_task_state is now async
+                        channel = await bot.fetch_channel(channel_id)
+                        if not channel:
+                            log.error(f"PUBLIC FALLBACK FAILED: Could not find channel with ID {channel_id} for reminder {reminder_id}.")
+                            continue 
+                        
+                        reply_content = f"Hey {user.mention}, I tried to DM you this reminder but your DMs are off!\n\n**Task:** {task}\n\nDid you get that done?"
+                        await channel.send(reply_content)
+                        sent_successfully = True # <--- SET TO TRUE ONLY ON SUCCESS
+                        log.info(f"Successfully sent public fallback to channel {channel_id} for user {author_id}.")
                         await db_utils.create_task_state(author_id, task, reply_content)
                     
                     except discord.errors.Forbidden:
-                        log.warning(f"DM FAILED for {author_id} (Forbidden). Attempting public fallback to channel {channel_id}.")
-                        
-                        # --- ATTEMPT 2: PUBLIC FALLBACK ---
-                        try:
-                            channel = await bot.fetch_channel(channel_id)
-                            if not channel:
-                                log.error(f"PUBLIC FALLBACK FAILED: Could not find channel with ID {channel_id} for reminder {reminder_id}.")
-                                continue 
-                            
-                            reply_content = f"Hey {user.mention}, I tried to DM you this reminder but your DMs are off!\n\n**Task:** {task}\n\nDid you get that done?"
-                            await channel.send(reply_content)
-                            sent_successfully = True
-                            log.info(f"Successfully sent public fallback to channel {channel_id} for user {author_id}.")
-                            await db_utils.create_task_state(author_id, task, reply_content)
-                        
-                        except discord.errors.Forbidden:
-                            log.error(f"PUBLIC FALLBACK FAILED: Bot does not have permissions in channel {channel_id} for reminder {reminder_id}.")
-                        except Exception as e:
-                            log.error(f"PUBLIC FALLBACK FAILED: Unknown error: {e}")
-                    
+                        log.error(f"PUBLIC FALLBACK FAILED: Bot does not have permissions in channel {channel_id} for reminder {reminder_id}.")
                     except Exception as e:
-                        log.error(f"UNKNOWN DM ERROR trying to send to user {author_id}: {e}")
+                        log.error(f"PUBLIC FALLBACK FAILED: Unknown error: {e}")
+                
+                except Exception as e:
+                    log.error(f"UNKNOWN DM ERROR trying to send to user {author_id}: {e}")
                 
                 # --- Post-Send Cleanup ---
                 if sent_successfully:
@@ -469,17 +414,19 @@ async def check_reminders():
                 log.critical(f"CRITICAL error in check_reminders sub-loop for reminder {reminder_id}: {e}")
                 try:
                     await asyncio.to_thread(db_utils.reminders_table.delete_item, Key={'user_id': reminder['user_id'], 'reminder_id': reminder['reminder_id']})
-                    log.error(f"Deleted erroring reminder {reminder['erroring_reminder']} to prevent loop.")
+                    log.error(f"Deleted erroring reminder {reminder['reminder_id']} to prevent loop.")
                 except Exception as del_e:
                     log.critical(f"FAILED to delete erroring reminder: {del_e}")
 
     except Exception as e:
         log.critical(f"An unexpected error occurred querying DynamoDB (Reminders): {e}")
+
+
 @check_reminders.before_loop
 async def before_check_reminders():
     await bot.wait_until_ready()
     print("Reminder check loop is starting.")
-
+    
 @tasks.loop(seconds=30)
 async def check_followups():
     """
@@ -492,13 +439,14 @@ async def check_followups():
     
     try:
         # --- Action 1: Handle "Snoozed" users ---
-        # Use db_utils table object
-        response_snooze = db_utils.state_table.query(
+        # NOTE: boto3 'query' is synchronous, so it MUST be in a thread
+        response_snooze = await asyncio.to_thread(
+            db_utils.state_table.query,
             IndexName=db_utils.DYNAMO_STATE_GSI_NAME,
-            KeyConditionExpression='#s = :s AND #nat <= :now', # Use placeholder #nat
+            KeyConditionExpression='#s = :s AND #nat <= :now',
             ExpressionAttributeNames={
                 '#s': 'status',
-                '#nat': 'next_action_time' # Map #nat to the attribute name
+                '#nat': 'next_action_time'
             },
             ExpressionAttributeValues={
                 ':s': 'WAITING_TO_REMIND',
@@ -517,15 +465,16 @@ async def check_followups():
                     reply = f"Hey! Just checking back in on that task: **{task}**\n\n{phrase}\n\nDid you get that done?"
                     await user.send(reply)
                     
-                    # Use db_utils function
-                    db_utils.add_memory_message(user_id, "assistant", reply, MAX_MEMORY_MESSAGES)
+                    # --- FIX 1: Must 'await' this async function ---
+                    await db_utils.add_memory_message(user_id, "assistant", reply, MAX_MEMORY_MESSAGES)
                     
                     # Move user back to WAITING_FOR_REPLY and set new timers
                     next_nudge_time = now + datetime.timedelta(hours=8)
                     new_despawn_time = now + datetime.timedelta(hours=24) # Reset 24h clock
 
-                    # Use db_utils table object
-                    db_utils.state_table.update_item(
+                    # --- FIX 2: Must run synchronous 'update_item' in a thread ---
+                    await asyncio.to_thread(
+                        db_utils.state_table.update_item,
                         Key={'user_id': str(user_id)},
                         UpdateExpression="SET #s = :s, #nat = :nat, #dt = :dt",
                         ExpressionAttributeNames={
@@ -541,18 +490,18 @@ async def check_followups():
                     )
             except Exception as e:
                 print(f"[Log] Error processing snooze for {user_id}: {e}")
-                # Safer to just delete the state if we can't DM them
-                # Use db_utils table object
-                db_utils.state_table.delete_item(Key={'user_id': str(user_id)})
+                # --- FIX 2: Must run synchronous 'delete_item' in a thread ---
+                await asyncio.to_thread(db_utils.state_table.delete_item, Key={'user_id': str(user_id)})
 
         # --- Action 2: Handle "Ghosting" users (and final cleanup) ---
-        # Use db_utils table object
-        response_ghost = db_utils.state_table.query(
+        # NOTE: boto3 'query' is synchronous, so it MUST be in a thread
+        response_ghost = await asyncio.to_thread(
+            db_utils.state_table.query,
             IndexName=db_utils.DYNAMO_STATE_GSI_NAME,
-            KeyConditionExpression='#s = :s AND #nat <= :now', # Use placeholder #nat
+            KeyConditionExpression='#s = :s AND #nat <= :now',
             ExpressionAttributeNames={
                 '#s': 'status',
-                '#nat': 'next_action_time' # Map #nat to the attribute name
+                '#nat': 'next_action_time'
             },
             ExpressionAttributeValues={
                 ':s': 'WAITING_FOR_REPLY',
@@ -573,15 +522,13 @@ async def check_followups():
                     if user:
                         await user.send(f"Hey, I haven't heard back from you about: **{task}**.\n\nI'm going to close this reminder for now. You can always set a new one if you still need to do it!")
                     
-                    # Delete the state
-                    # Use db_utils table object
-                    db_utils.state_table.delete_item(Key={'user_id': str(user_id)})
+                    # --- FIX 2: Must run synchronous 'delete_item' in a thread ---
+                    await asyncio.to_thread(db_utils.state_table.delete_item, Key={'user_id': str(user_id)})
                 
                 except Exception as e:
                     print(f"[Log] Error sending final despawn message to {user_id}: {e}")
-                    # Still delete the state even if DM fails
-                    # Use db_utils table object
-                    db_utils.state_table.delete_item(Key={'user_id': str(user_id)})
+                    # --- FIX 2: Must run synchronous 'delete_item' in a thread ---
+                    await asyncio.to_thread(db_utils.state_table.delete_item, Key={'user_id': str(user_id)})
                 
                 continue # Skip to the next user
 
@@ -594,15 +541,15 @@ async def check_followups():
                     reply = f"Hey! Just checking in on that task: **{task}**\n\n{phrase}\n\nDid you get that done?"
                     await user.send(reply)
                     
-                    # Use db_utils function
-                    db_utils.add_memory_message(user_id, "assistant", reply, MAX_MEMORY_MESSAGES)
+                    # --- FIX 1: Must 'await' this async function ---
+                    await db_utils.add_memory_message(user_id, "assistant", reply, MAX_MEMORY_MESSAGES)
                     
-                    # Re-arm the *next* nudge timer (e.g., in another 8 hours)
-                    # We do NOT reset the despawn_time.
+                    # Re-arm the *next* nudge timer
                     next_nudge_time = now + datetime.timedelta(hours=8)
 
-                    # Use db_utils table object
-                    db_utils.state_table.update_item(
+                    # --- FIX 2: Must run synchronous 'update_item' in a thread ---
+                    await asyncio.to_thread(
+                        db_utils.state_table.update_item,
                         Key={'user_id': str(user_id)},
                         UpdateExpression="SET #nat = :nat",
                         ExpressionAttributeNames={'#nat': 'next_action_time'},
@@ -610,13 +557,11 @@ async def check_followups():
                     )
             except Exception as e:
                 print(f"[Log] Error ghost-nudging {user_id}: {e}")
-                # If we can't DM them, just delete the state
-                # Use db_utils table object
-                db_utils.state_table.delete_item(Key={'user_id': str(user_id)})
+                # --- FIX 2: Must run synchronous 'delete_item' in a thread ---
+                await asyncio.to_thread(db_utils.state_table.delete_item, Key={'user_id': str(user_id)})
 
     except Exception as e:
         print(f"[Log] An unexpected error occurred querying DynamoDB (State): {e}")
-
 
 @check_followups.before_loop
 async def before_check_followups():
@@ -635,8 +580,9 @@ def admin_only():
 @admin_only()
 async def listreminders(ctx):
     try:
-        # Use db_utils table object
-        response = db_utils.reminders_table.query(
+        # --- FIX: Run blocking call in thread ---
+        response = await asyncio.to_thread(
+            db_utils.reminders_table.query,
             KeyConditionExpression='user_id = :uid',
             ExpressionAttributeValues={':uid': str(ctx.author.id)}
         )
@@ -674,7 +620,6 @@ async def remindme(ctx, minutes: int, *, task: str):
         if minutes <= 0: await ctx.send("Please provide a positive number of minutes!"); return
         now = datetime.datetime.now(LOCAL_TZ) 
         remind_time = now + datetime.timedelta(minutes=minutes)
-        # Use db_utils function
         if await db_utils.add_reminder_to_db(ctx.author.id, ctx.channel.id, remind_time, task):
             await ctx.send(f"Okay, {ctx.author.mention}! I'll remind you to **{task}** at <t:{int(remind_time.timestamp())}:f>.")
         else: await ctx.send("Sorry, I had an error saving that reminder to the database.")
@@ -686,7 +631,6 @@ async def remindat(ctx, time_str: str, *, task: str):
         remind_time = dateparser.parse(time_str, settings={'TIMEZONE': 'America/Chicago', 'RETURN_AS_TIMEZONE_AWARE': True})
         if not remind_time: await ctx.send(f'Sorry, I couldn\'t understand the time "{time_str}".'); return
         if remind_time <= datetime.datetime.now(LOCAL_TZ): await ctx.send(f"That time is in the past! Please provide a future time."); return
-        # Use db_utils function
         if await db_utils.add_reminder_to_db(ctx.author.id, ctx.channel.id, remind_time, task):
              await ctx.send(f"Got it, {ctx.author.mention}! I'll remind you to **{task}** at <t:{int(remind_time.timestamp())}:f>.")
         else: await ctx.send("Sorry, I had an error saving that reminder to the database.")
@@ -702,7 +646,6 @@ async def setreminder(ctx, users: commands.Greedy[discord.User], time_str: str, 
         if remind_time <= datetime.datetime.now(LOCAL_TZ): await ctx.send(f"That time is in the past!"); return
         success_users = []; fail_users = []
         for user in users:
-            # Use db_utils function
             if await db_utils.add_reminder_to_db(user.id, ctx.channel.id, remind_time, task): success_users.append(user.mention)
             else: fail_users.append(user.mention)
         response_msg = ""
@@ -716,18 +659,15 @@ async def setreminder(ctx, users: commands.Greedy[discord.User], time_str: str, 
 async def routinereminder(ctx, users: commands.Greedy[discord.User], days_str: str, time_str: str, *, task: str):
     if not users: await ctx.send("You must specify at least one user!"); return
     try:
-        # Use db_utils function
         target_weekdays = db_utils.parse_days_string(days_str)
         if not target_weekdays: await ctx.send(f"I couldn't understand the days: \"{days_str}\"."); return
         parsed_time = dateparser.parse(time_str, settings={'TIMEZONE': 'America/Chicago', 'RETURN_AS_TIMEZONE_AWARE': True})
         if not parsed_time: await ctx.send(f"I couldn't understand the time: \"{time_str}\"."); return
         target_time = parsed_time.time()
         rule_str = f"WEEKLY:{','.join(map(str, target_weekdays))}:{target_time.strftime('%H:%M')}"
-        # Use db_utils function
         first_occurrence_time = db_utils.calculate_next_occurrence(datetime.datetime.now(LOCAL_TZ), target_weekdays, target_time)
         success_users = []; fail_users = []
         for user in users:
-            # Use db_utils function
             if await db_utils.add_reminder_to_db(user.id, ctx.channel.id, first_occurrence_time, task, is_recurring=True, recurrence_rule=rule_str):
                 success_users.append(user.mention)
             else: fail_users.append(user.mention)
@@ -742,30 +682,31 @@ async def routinereminder(ctx, users: commands.Greedy[discord.User], days_str: s
         await ctx.send(response_msg)
     except Exception as e: await ctx.send(f"An error occurred: {e}")
 
-# --- Helper for Admin Update/Delete commands ---
-# (This is now in db_utils.py)
-
 @bot.command(name='deletereminder', help='(Admin only) Deletes a reminder. Usage: !deletereminder <id>')
 @admin_only()
 async def deletereminder(ctx, short_id: str):
-    # Use db_utils function
+    # db_utils.find_reminder_by_id is synchronous but just scans a local var,
+    # so we only need to thread the actual DB call.
     item, error = db_utils.find_reminder_by_id(short_id)
     if error: await ctx.send(error); return
     try:
-        # Use db_utils table object
-        db_utils.reminders_table.delete_item(Key={'user_id': item['user_id'], 'reminder_id': item['reminder_id']})
+        # --- FIX: Run blocking call in thread ---
+        await asyncio.to_thread(
+            db_utils.reminders_table.delete_item,
+            Key={'user_id': item['user_id'], 'reminder_id': item['reminder_id']}
+        )
         await ctx.send(f"✅ Successfully deleted reminder: **{item['task']}** (for user <@{item['user_id']}>)")
     except Exception as e: await ctx.send(f"An error occurred while deleting: {e}")
 
 @bot.command(name='updatetask', help='(Admin only) Updates a task. Usage: !updatetask <id> <new task>')
 @admin_only()
 async def updatetask(ctx, short_id: str, *, new_task: str):
-    # Use db_utils function
     item, error = db_utils.find_reminder_by_id(short_id)
     if error: await ctx.send(error); return
     try:
-        # Use db_utils table object
-        db_utils.reminders_table.update_item(
+        # --- FIX: Run blocking call in thread ---
+        await asyncio.to_thread(
+            db_utils.reminders_table.update_item,
             Key={'user_id': item['user_id'], 'reminder_id': item['reminder_id']},
             UpdateExpression="set task = :t", ExpressionAttributeValues={':t': new_task}
         )
@@ -775,7 +716,6 @@ async def updatetask(ctx, short_id: str, *, new_task: str):
 @bot.command(name='updatetime', help='(Admin only) Updates time. Usage: !updatetime <id> "<time>"')
 @admin_only()
 async def updatetime(ctx, short_id: str, time_str: str):
-    # Use db_utils function
     item, error = db_utils.find_reminder_by_id(short_id)
     if error: await ctx.send(error); return
     try:
@@ -785,14 +725,16 @@ async def updatetime(ctx, short_id: str, time_str: str):
 
         new_remind_time_iso = new_remind_time.isoformat()
         
-        # Update logic: Delete and replace to ensure GSI is updated
-        # Use db_utils table object
-        db_utils.reminders_table.delete_item(Key={'user_id': item['user_id'], 'reminder_id': item['reminder_id']})
-        item['remind_time_utc'] = new_remind_time_iso 
-        if 'is_recurring' in item:
-            item['is_recurring'] = False; item['recurrence_rule'] = 'NONE'
-        # Use db_utils table object
-        db_utils.reminders_table.put_item(Item=item)
+        # --- FIX: Run blocking calls in thread ---
+        # Define a small helper function to run both calls in the same thread
+        def update_item_in_db():
+            db_utils.reminders_table.delete_item(Key={'user_id': item['user_id'], 'reminder_id': item['reminder_id']})
+            item['remind_time_utc'] = new_remind_time_iso 
+            if 'is_recurring' in item:
+                item['is_recurring'] = False; item['recurrence_rule'] = 'NONE'
+            db_utils.reminders_table.put_item(Item=item)
+
+        await asyncio.to_thread(update_item_in_db)
         
         new_time_discord = f"<t:{int(new_remind_time.timestamp())}:f>"
         await ctx.send(f"✅ Time updated for **{item['task']}**!\n**New Time:** {new_time_discord}\n*(Note: This action made the reminder non-recurring.)*")
@@ -807,8 +749,8 @@ async def memdump(ctx, user: discord.User):
         await ctx.send("You must mention a user. Usage: `!memdump @User`")
         return
         
-    # Use db_utils function
-    context = db_utils.get_task_context(user.id)
+    # get_task_context is already async
+    context = await db_utils.get_task_context(user.id)
     if not context:
         await ctx.send(f"No active task state found for {user.mention}."); return
     
@@ -842,14 +784,17 @@ async def memclear(ctx, user: discord.User):
         await ctx.send("You must mention a user. Usage: `!memclear @User`")
         return
 
-    # Use db_utils function
-    context = db_utils.get_task_context(user.id)
+    # get_task_context is already async
+    context = await db_utils.get_task_context(user.id)
     if not context:
         await ctx.send(f"No active task state found for {user.mention}."); return
     
     try:
-        # Use db_utils table object
-        db_utils.state_table.delete_item(Key={'user_id': str(user.id)})
+        # --- FIX: Run blocking call in thread ---
+        await asyncio.to_thread(
+            db_utils.state_table.delete_item,
+            Key={'user_id': str(user.id)}
+        )
         await ctx.send(f"✅ Successfully cleared the active task state for {user.mention}.")
         print(f"[Log] Admin {ctx.author.id} cleared state for {user.id}")
     except Exception as e:
