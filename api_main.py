@@ -12,8 +12,11 @@ from typing import List, Optional
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 import asyncio
+from magnum import Magnum
 from dotenv import load_dotenv
 from urllib.parse import quote
+
+
 
 load_dotenv()
 
@@ -338,10 +341,4 @@ async def delete_reminder_endpoint(
         print("[API ERROR]", e)
         raise HTTPException(500, f"Error: {str(e)}")
 
-
-# ==========================
-#   UVICORN
-# ==========================
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("api_main:app", host="0.0.0.0", port=8000)
+handler = Magnum(app)
