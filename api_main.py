@@ -72,7 +72,7 @@ if not all([DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET, SECRET_KEY]):
 
 
 # --- Config ---
-API_BASE_URL = "http://3.83.248.40:8000"
+API_BASE_URL = ""
 FRONTEND_URL = "https://d1wdxkpmgii4om.cloudfront.net/"
 
 DISCORD_AUTH_URL = "https://discord.com/oauth2/authorize"
