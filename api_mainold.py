@@ -12,7 +12,6 @@ from typing import List, Optional
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 import asyncio
-from magnum import Magnum
 from dotenv import load_dotenv
 from urllib.parse import quote
 
@@ -341,4 +340,4 @@ async def delete_reminder_endpoint(
         print("[API ERROR]", e)
         raise HTTPException(500, f"Error: {str(e)}")
 
-handler = Magnum(app)
+handler = app
